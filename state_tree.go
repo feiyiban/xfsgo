@@ -31,10 +31,6 @@ import (
 
 type Code []byte
 
-var (
-	CodePrefix = []byte("c") // CodePrefix + code hash -> account code
-)
-
 //StateObj is an importment type which represents an xfs account that is being modified.
 // The flow of usage is as follows:
 // First, you need to obtain a StateObj object.
@@ -45,7 +41,6 @@ type StateObj struct {
 	address      common.Address //hash of address of the account
 	balance      *big.Int
 	nonce        uint64
-	extra        []byte
 	code         []byte
 	stateRoot    common.Hash
 	cacheStorage map[[32]byte][]byte
@@ -87,9 +82,7 @@ func (so *StateObj) Decode(data []byte) error {
 			so.code = bs
 		}
 	}
-	if bs, ok := loadBytesByMapKey(r, "code"); ok {
-		so.code = bs
-	}
+
 	if bs, ok := loadBytesByMapKey(r, "state_root"); ok {
 		so.stateRoot = common.Bytes2Hash(bs)
 	}
@@ -189,9 +182,7 @@ func (so *StateObj) SubNonce(nonce uint64) {
 func (so *StateObj) GetNonce() uint64 {
 	return so.nonce
 }
-func (so *StateObj) GetExtra() []byte {
-	return so.extra
-}
+
 func (so *StateObj) SetState(key [32]byte, value []byte) {
 	so.cacheStorage[key] = value
 }
