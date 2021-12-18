@@ -18,6 +18,7 @@ package ahash
 
 import (
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 )
 
@@ -30,4 +31,15 @@ func SHA256(data []byte) []byte {
 
 func SHA256HEX(data []byte) string {
 	return hex.EncodeToString(SHA256(data))
+}
+
+func SHA512(data []byte) []byte {
+	hash := sha512.Sum512(data)
+	var bs = make([]byte, len(hash))
+	copy(bs, hash[:])
+	return bs
+}
+
+func SHA512HEX(data []byte) string {
+	return hex.EncodeToString(SHA512(data))
 }

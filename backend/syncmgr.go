@@ -31,6 +31,7 @@ var (
 	errCancelHashFetch  = errors.New("hash fetching canceled (requested)")
 	errCancelBlockFetch = errors.New("block fetching canceled (requested)")
 	errBusy             = errors.New("busy")
+	warnunsync          = errors.New("warnunsync")
 	//errEmptyHashSet = errors.New("empty hash set by peer")
 )
 
@@ -78,31 +79,33 @@ type syncMgr struct {
 	processLock   sync.Mutex
 	cancelLock    sync.RWMutex
 	queue         *syncQueue
-	reportMu      sync.RWMutex
 	lastReport    time.Time
 	synchronising int32
 	lastRecord    uint64
+
+	nodeSyncFlag bool
 }
 
 func newSyncMgr(
 	version, network uint32,
 	chain chainMgr,
 	eventBus *xfsgo.EventBus,
-	txPool *xfsgo.TxPool) *syncMgr {
+	txPool *xfsgo.TxPool, nodeSyncFlag bool) *syncMgr {
 	mgr := &syncMgr{
-		chain:       chain,
-		version:     version,
-		network:     network,
-		peers:       newPeerSet(),
-		eventBus:    eventBus,
-		txPool:      txPool,
-		newPeerCh:   make(chan syncpeer, 1),
-		hashPackCh:  make(chan hashPack, 1),
-		blockPackCh: make(chan blockPack, 1),
-		txPackCh:    make(chan txPack, 1),
-		processCh:   make(chan bool, 1),
-		cancelCh:    make(chan struct{}),
-		queue:       newSyncQueue(),
+		chain:        chain,
+		version:      version,
+		network:      network,
+		nodeSyncFlag: nodeSyncFlag,
+		peers:        newPeerSet(),
+		eventBus:     eventBus,
+		txPool:       txPool,
+		newPeerCh:    make(chan syncpeer, 1),
+		hashPackCh:   make(chan hashPack, 1),
+		blockPackCh:  make(chan blockPack, 1),
+		txPackCh:     make(chan txPack, 1),
+		processCh:    make(chan bool, 1),
+		cancelCh:     make(chan struct{}),
+		queue:        newSyncQueue(),
 	}
 	hm := newHandlerMgr()
 	syncHanlder := newSyncHandler(chain, mgr.handleHashes,
@@ -137,7 +140,7 @@ func (mgr *syncMgr) handleTransactions(p discover.NodeId, txs RemoteTxs) error {
 		var targetTx *xfsgo.Transaction
 		_ = common.Objcopy(tx, &targetTx)
 		if err := mgr.txPool.Add(targetTx); err != nil {
-			logrus.Warnf("handle transactions msg err: %s", err)
+			//logrus.Warnf("handle transactions msg err: %s", err)
 		}
 	}
 	return nil
@@ -643,6 +646,11 @@ func (mgr *syncMgr) synchronise(pid discover.NodeId) error {
 	if p = ps.get(pid); p == nil {
 		return errUnKnowPeer
 	}
+
+	if !mgr.nodeSyncFlag {
+		return warnunsync
+	}
+
 	return mgr.syncWithPeer(p)
 }
 
@@ -660,6 +668,7 @@ func (mgr *syncMgr) Synchronise(p syncpeer) {
 	case nil:
 		logrus.Infof("Synchronisation completed")
 	case errBusy:
+	case warnunsync:
 	default:
 		logrus.Errorf("Synchronisation failed: %v", err)
 	}
@@ -706,12 +715,18 @@ func (mgr *syncMgr) txSyncLoop() {
 	for {
 		select {
 		case pack := <-mgr.txPackCh:
+			if !mgr.nodeSyncFlag {
+				continue
+			}
 			send(pack)
 		}
 	}
 }
 
 func (mgr *syncMgr) BroadcastBlock(block *RemoteBlock) {
+	if !mgr.nodeSyncFlag {
+		return
+	}
 	for _, p := range mgr.peers.peerList() {
 		if p.HasBlock(block.Header.Hash) {
 			continue
@@ -723,6 +738,7 @@ func (mgr *syncMgr) BroadcastBlock(block *RemoteBlock) {
 }
 
 func (mgr *syncMgr) txBroadcastLoop() {
+
 	txPreEventSub := mgr.eventBus.Subscript(xfsgo.TxPreEvent{})
 	defer txPreEventSub.Unsubscribe()
 	for {
@@ -738,6 +754,10 @@ func (mgr *syncMgr) txBroadcastLoop() {
 func (mgr *syncMgr) BroadcastTx(tx *RemoteBlockTx) {
 	mHeader := mgr.chain.CurrentBHeader()
 	mHeight := mHeader.Height
+	if !mgr.nodeSyncFlag {
+		return
+	}
+
 	for _, p := range mgr.peers.peerList() {
 		if p.Height() < mHeight {
 			continue

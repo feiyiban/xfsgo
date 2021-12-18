@@ -26,23 +26,29 @@ import (
 	"xfsgo/storage/badger"
 
 	// "github.com/btcsuite/goleveldb/leveldb/journal"
+
 	"github.com/sirupsen/logrus"
 )
 
 type Tree struct {
-	db    *treeDb
-	root  *TreeNode
-	cache *lru.Cache
+	db     *treeDb
+	root   *TreeNode
+	cache  *lru.Cache
+	prefix []byte
 }
 
 // NewTree creates a trie with an existing db and a root node.
 // If the root exists and its format is correct, you need load the root node from the db
 // and store the datas in a cache.
-func NewTree(db badger.IStorage, root []byte) *Tree {
+func NewTree(db badger.IStorage, root []byte, prefix []byte) *Tree {
 	t := &Tree{
-		db: newTreeDb(db),
+		db:     newTreeDb(db),
+		prefix: make([]byte, 0),
 	}
 
+	if len(prefix) > 0 {
+		t.prefix = prefix
+	}
 	t.cache = lru.NewCache(2048)
 	var zero [32]byte
 	if root != nil && len(root) == 32 && bytes.Compare(root, zero[:]) > common.Zero {
@@ -51,12 +57,16 @@ func NewTree(db badger.IStorage, root []byte) *Tree {
 
 	return t
 }
-func NewTreeN(db badger.IStorage, root []byte) (*Tree, error) {
+func NewTreeN(db badger.IStorage, root []byte, prefix []byte) (*Tree, error) {
 	var err error
 	t := &Tree{
-		db: newTreeDb(db),
+		db:     newTreeDb(db),
+		prefix: make([]byte, 0),
 	}
 
+	if len(prefix) > 0 {
+		t.prefix = prefix
+	}
 	t.cache = lru.NewCache(2048)
 	var zero [32]byte
 	if root != nil && len(root) == 32 && bytes.Compare(root, zero[:]) > common.Zero {
@@ -69,16 +79,48 @@ func NewTreeN(db badger.IStorage, root []byte) (*Tree, error) {
 
 	return t, nil
 }
+
 func (t *Tree) Put(k, v []byte) {
 	if t.root == nil {
 		t.root = newLeafNode(k, v)
 		return
 	}
+
+	if len(t.prefix) > 0 {
+		k = append(k, t.prefix...)
+	}
+
 	t.root = t.root.insert(t, k, v)
+}
+
+func (t *Tree) Remove(k []byte) error {
+	if t.root == nil {
+		return errors.New("failed to remove,avlTree is empty.")
+	}
+	if len(t.prefix) > 0 {
+		k = append(k, t.prefix...)
+	}
+	t.root = t.root.remove(t, k)
+	return nil
+}
+
+func (t *Tree) Update(k, v []byte) error {
+	if t.root == nil {
+		return errors.New("root not nil")
+	}
+	if len(t.prefix) > 0 {
+		k = append(k, t.prefix...)
+	}
+	t.root = t.root.insert(t, k, v)
+	return nil
 }
 
 func (t *Tree) Copy() *Tree {
 	return &Tree{db: t.db, root: t.root, cache: t.cache}
+}
+
+func (t *Tree) Hash() common.Hash {
+	return t.root.Hash()
 }
 
 func (t *Tree) Checksum() []byte {
@@ -184,6 +226,9 @@ func (t *Tree) Get(k []byte) ([]byte, bool) {
 	if t.root == nil {
 		return nil, false
 	}
+	if len(t.prefix) > 0 {
+		k = append(k, t.prefix...)
+	}
 	return t.root.lookup(t, k)
 }
 
@@ -204,6 +249,35 @@ func (t *Tree) foreach(n *TreeNode, fn func(key []byte, value []byte)) {
 	}
 	t.foreach(t.mustLoadLeft(n), fn)
 	t.foreach(t.mustLoadRight(n), fn)
+}
+
+func (s *Stack) isEmpty() bool {
+	return s.head == nil
+}
+
+// Initializes a new iterator.
+// Since there are no parent pointers in the tree currently,
+// a stack is being use to traverse in-order.
+func (t *Tree) NewIterator(prefix []byte) *Iterator {
+	if t.root == nil {
+		return nil
+	}
+	iter := Iterator{stack: &Stack{}}
+	cur := t.root
+	for cur.leftNode != nil {
+		if len(prefix) > 0 {
+			key := append(t.prefix, prefix...)
+			if common.BytesEquals(key, cur.leftNode.key) {
+				iter.stack.push(cur)
+				cur = cur.leftNode
+			}
+		} else {
+			iter.stack.push(cur)
+			cur = cur.leftNode
+		}
+	}
+	iter.currentNode = cur
+	return &iter
 }
 
 func (t *Tree) Commit() error {

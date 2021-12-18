@@ -24,7 +24,15 @@ import (
 	"xfsgo/common"
 	"xfsgo/common/ahash"
 	"xfsgo/common/rawencode"
+	"xfsgo/crypto"
 	"xfsgo/storage/badger"
+	"xfsgo/types"
+)
+
+type Code []byte
+
+var (
+	CodePrefix = []byte("c") // CodePrefix + code hash -> account code
 )
 
 //StateObj is an importment type which represents an xfs account that is being modified.
@@ -74,8 +82,10 @@ func (so *StateObj) Decode(data []byte) error {
 			so.nonce = num.Uint64()
 		}
 	}
-	if bs, ok := loadBytesByMapKey(r, "extra"); ok {
-		so.extra = bs
+	if extra, ok := r["code"]; ok {
+		if bs, err := hex.DecodeString(extra); err == nil {
+			so.code = bs
+		}
 	}
 	if bs, ok := loadBytesByMapKey(r, "code"); ok {
 		so.code = bs
@@ -91,7 +101,7 @@ func (so *StateObj) Encode() ([]byte, error) {
 		"address": so.address.String(),
 		"balance": so.balance.Text(10),
 		"nonce":   new(big.Int).SetUint64(so.nonce).Text(10),
-		"extra":   hex.EncodeToString(so.extra),
+		"code":    hex.EncodeToString(so.code),
 	}
 	if so.code != nil {
 		objmap["code"] = hex.EncodeToString(so.code)
@@ -162,8 +172,9 @@ func (so *StateObj) GetBalance() *big.Int {
 	return so.balance
 }
 
-func (so *StateObj) GetAddress() common.Address {
-	return so.address
+// Returns the address of the contract/account
+func (s *StateObj) Address() common.Address {
+	return s.address
 }
 
 func (so *StateObj) SetNonce(nonce uint64) {
@@ -188,7 +199,15 @@ func (so *StateObj) makeStateKey(key [32]byte) []byte {
 	return ahash.SHA256(append(so.address[:], key[:]...))
 }
 func (so *StateObj) getStateTree() *avlmerkle.Tree {
-	return avlmerkle.NewTree(so.db, so.stateRoot[:])
+	return avlmerkle.NewTree(so.db, so.stateRoot[:], nil)
+}
+
+func NewStateObjN(address common.Address, tree *StateTree) *StateObj {
+	obj := &StateObj{
+		address:    address,
+		merkleTree: tree.merkleTree,
+	}
+	return obj
 }
 
 func (so *StateObj) GetStateValue(key [32]byte) []byte {
@@ -201,6 +220,20 @@ func (so *StateObj) GetStateValue(key [32]byte) []byte {
 	return nil
 }
 
+func (so *StateObj) GetData() []byte {
+	return so.code
+}
+
+func (s *StateObj) SetCode(codeHash common.Hash, code []byte) {
+	// prevcode := s.Code(s.db.db)
+	// s.db.journal.append(codeChange{
+	// 	account:  &s.address,
+	// 	prevhash: s.CodeHash(),
+	// 	prevcode: prevcode,
+	// })
+	s.setCode(codeHash, code)
+}
+
 func (so *StateObj) Update() {
 	for k, v := range so.cacheStorage {
 		so.getStateTree().Put(so.makeStateKey(k), v)
@@ -211,6 +244,24 @@ func (so *StateObj) Update() {
 	hash := ahash.SHA256(so.address[:])
 	so.merkleTree.Put(hash, objRaw)
 
+}
+
+func (s *StateObj) setCode(codeHash common.Hash, code []byte) {
+	s.code = code
+	// s.data.CodeHash = codeHash[:]
+	// s.dirtyCode = true
+}
+
+// Code returns the contract code associated with this object, if any.
+func (s *StateObj) Code(treeDB badger.IStorage) []byte {
+
+	return s.code
+
+	// code, err := treeDB.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
+	// if err != nil {
+	// 	s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
+	// }
+	// s.code = code
 }
 
 type StateTree struct {
@@ -226,7 +277,7 @@ func NewStateTree(db badger.IStorage, root []byte) *StateTree {
 		treeDB: db,
 		objs:   make(map[common.Address]*StateObj),
 	}
-	st.merkleTree = avlmerkle.NewTree(st.treeDB, root)
+	st.merkleTree = avlmerkle.NewTree(st.treeDB, root, nil)
 	return st
 }
 func NewStateTreeN(db badger.IStorage, root []byte) (*StateTree, error) {
@@ -236,7 +287,7 @@ func NewStateTreeN(db badger.IStorage, root []byte) (*StateTree, error) {
 		treeDB: db,
 		objs:   make(map[common.Address]*StateObj),
 	}
-	st.merkleTree, err = avlmerkle.NewTreeN(st.treeDB, root)
+	st.merkleTree, err = avlmerkle.NewTreeN(st.treeDB, root, nil)
 	return st, err
 }
 func (st *StateTree) HashAccount(addr common.Address) bool {
@@ -287,6 +338,42 @@ func (st *StateTree) GetNonce(addr common.Address) uint64 {
 	return 0
 }
 
+// SubBalance subtracts amount from the account associated with addr.
+func (s *StateTree) SubBalance(addr common.Address, amount *big.Int) {
+	stateObject := s.GetOrNewStateObj(addr)
+	if stateObject != nil {
+		stateObject.SubBalance(amount)
+	}
+}
+
+func (s *StateTree) SetBalance(addr common.Address, amount *big.Int) {
+	stateObject := s.GetOrNewStateObj(addr)
+	if stateObject != nil {
+		stateObject.SetBalance(amount)
+	}
+}
+
+func (s *StateTree) SetNonce(addr common.Address, nonce uint64) {
+	stateObject := s.GetOrNewStateObj(addr)
+	if stateObject != nil {
+		stateObject.SetNonce(nonce)
+	}
+}
+
+func (s *StateTree) SetCode(addr common.Address, code []byte) {
+	stateObject := s.GetOrNewStateObj(addr)
+	if stateObject != nil {
+		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+	}
+}
+
+func (s *StateTree) SetState(addr common.Address, key, value common.Hash) {
+	// stateObject := s.GetOrNewStateObj(addr)
+	// if stateObject != nil {
+	// 	stateObject.SetState(s.db, key, value)
+	// }
+}
+
 func (st *StateTree) AddNonce(addr common.Address, val uint64) {
 	obj := st.GetOrNewStateObj(addr)
 	if obj != nil {
@@ -316,19 +403,19 @@ func (st *StateTree) newStateObj(address common.Address) *StateObj {
 	st.objs[obj.address] = obj
 	return obj
 }
-func (st *StateTree) CreateAccount(addr common.Address) *StateObj {
+
+func (st *StateTree) CreateAccount(addr common.Address) {
 	old := st.GetStateObj(addr)
 	add := st.newStateObj(addr)
 	if old != nil {
 		add.balance = old.balance
 	}
-	return add
 }
 
 func (st *StateTree) GetOrNewStateObj(addr common.Address) *StateObj {
 	stateObj := st.GetStateObj(addr)
 	if stateObj == nil {
-		stateObj = st.CreateAccount(addr)
+		stateObj = st.newStateObj(addr)
 	}
 	return stateObj
 }
@@ -349,4 +436,209 @@ func (st *StateTree) UpdateAll() {
 
 func (st *StateTree) Commit() error {
 	return st.merkleTree.Commit()
+}
+
+// AddAddressToAccessList adds the given address to the access list
+func (s *StateTree) AddAddressToAccessList(addr common.Address) {
+	// if s.accessList.AddAddress(addr) {
+	// 	s.journal.append(accessListAddAccountChange{&addr})
+	// }
+}
+
+// AddSlotToAccessList adds the given (address, slot)-tuple to the access list
+func (s *StateTree) AddSlotToAccessList(addr common.Address, slot common.Hash) {
+	// addrMod, slotMod := s.accessList.AddSlot(addr, slot)
+	// if addrMod {
+	// 	// In practice, this should not happen, since there is no way to enter the
+	// 	// scope of 'address' without having the 'address' become already added
+	// 	// to the access list (via call-variant, create, etc).
+	// 	// Better safe than sorry, though
+	// 	s.journal.append(accessListAddAccountChange{&addr})
+	// }
+	// if slotMod {
+	// 	s.journal.append(accessListAddSlotChange{
+	// 		address: &addr,
+	// 		slot:    &slot,
+	// 	})
+	// }
+}
+
+// AddressInAccessList returns true if the given address is in the access list.
+func (s *StateTree) AddressInAccessList(addr common.Address) bool {
+	// return s.accessList.ContainsAddress(addr)
+	return true
+}
+
+// SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
+func (s *StateTree) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+	// return s.accessList.Contains(addr, slot)
+	return true, true
+}
+
+func (s *StateTree) AddLog(*types.Log) {
+
+}
+
+// AddPreimage records a SHA3 preimage seen by the VM.
+func (s *StateTree) AddPreimage(hash common.Hash, preimage []byte) {
+	// if _, ok := s.preimages[hash]; !ok {
+	// 	s.journal.append(addPreimageChange{hash: hash})
+	// 	pi := make([]byte, len(preimage))
+	// 	copy(pi, preimage)
+	// 	s.preimages[hash] = pi
+	// }
+}
+
+// Preimages returns a list of SHA3 preimages that have been submitted.
+func (s *StateTree) Preimages() map[common.Hash][]byte {
+	// return s.preimages
+	return nil
+}
+
+// AddRefund adds gas to the refund counter
+func (s *StateTree) AddRefund(gas uint64) {
+	// s.journal.append(refundChange{prev: s.refund})
+	// s.refund += gas
+}
+
+// SubRefund removes gas from the refund counter.
+// This method will panic if the refund counter goes below zero
+func (s *StateTree) SubRefund(gas uint64) {
+	// s.journal.append(refundChange{prev: s.refund})
+	// if gas > s.refund {
+	// 	panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
+	// }
+	// s.refund -= gas
+}
+
+// Exist reports whether the given account address exists in the state.
+// Notably this also returns true for suicided accounts.
+func (s *StateTree) Exist(addr common.Address) bool {
+	// return s.getStateObject(addr) != nil
+	return true
+}
+
+// Empty returns whether the state object is either non-existent
+// or empty according to the EIP161 specification (balance = nonce = code = 0)
+func (s *StateTree) Empty(addr common.Address) bool {
+	// so := s.getStateObject(addr)
+	// return so == nil || so.empty()
+	return true
+}
+
+func (db *StateTree) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
+	// so := db.getStateObject(addr)
+	// if so == nil {
+	// 	return nil
+	// }
+	// it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
+
+	// for it.Next() {
+	// 	key := common.BytesToHash(db.trie.GetKey(it.Key))
+	// 	if value, dirty := so.dirtyStorage[key]; dirty {
+	// 		if !cb(key, value) {
+	// 			return nil
+	// 		}
+	// 		continue
+	// 	}
+
+	// 	if len(it.Value) > 0 {
+	// 		_, content, _, err := rlp.Split(it.Value)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		if !cb(key, common.BytesToHash(content)) {
+	// 			return nil
+	// 		}
+	// 	}
+	// }
+	return nil
+}
+
+func (s *StateTree) GetCode(addr common.Address) []byte {
+	stateObject := s.GetStateObj(addr)
+	if stateObject != nil {
+		return stateObject.Code(s.treeDB)
+	}
+	return nil
+}
+
+func (s *StateTree) GetCodeSize(addr common.Address) int {
+	// stateObject := s.getStateObject(addr)
+	// if stateObject != nil {
+	// 	return stateObject.CodeSize(s.db)
+	// }
+	return 0
+}
+
+func (s *StateTree) GetCodeHash(addr common.Address) common.Hash {
+	// stateObject := s.getStateObject(addr)
+	// if stateObject == nil {
+	// 	return common.Hash{}
+	// }
+	// return common.BytesToHash(stateObject.CodeHash())
+
+	return common.Hash{}
+}
+
+// GetState retrieves a value from the given account's storage trie.
+func (s *StateTree) GetState(addr common.Address, hash common.Hash) common.Hash {
+	// stateObject := s.getStateObject(addr)
+	// if stateObject != nil {
+	// 	return stateObject.GetState(s.db, hash)
+	// }
+	return common.Hash{}
+}
+
+// GetCommittedState retrieves a value from the given account's committed storage trie.
+func (s *StateTree) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+	// stateObject := s.getStateObject(addr)
+	// if stateObject != nil {
+	// 	return stateObject.GetCommittedState(s.db, hash)
+	// }
+	return common.Hash{}
+}
+
+// GetRefund returns the current value of the refund counter.
+func (s *StateTree) GetRefund() uint64 {
+	// return s.refund
+	return 0
+}
+
+func (s *StateTree) HasSuicided(common.Address) bool {
+	return true
+}
+
+// Snapshot returns an identifier for the current revision of the state.
+func (s *StateTree) Snapshot() int {
+	// id := s.nextRevisionId
+	// s.nextRevisionId++
+	// s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+	// return id
+	return 0
+}
+
+func (s *StateTree) RevertToSnapshot(int) {
+
+}
+
+// Suicide marks the given account as suicided.
+// This clears the account balance.
+//
+// The account's state object is still available until the state is committed,
+// getStateObject will return a non-nil account after Suicide.
+func (s *StateTree) Suicide(addr common.Address) bool {
+	// stateObject := s.getStateObject(addr)
+	// if stateObject == nil {
+	// 	return false
+	// }
+	// s.journal.append(suicideChange{
+	// 	account:     &addr,
+	// 	prev:        stateObject.suicided,
+	// 	prevbalance: new(big.Int).Set(stateObject.Balance()),
+	// })
+	// stateObject.markSuicided()
+	// stateObject.data.Balance = new(big.Int)
+
+	return true
 }

@@ -20,12 +20,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"math/big"
 	"strconv"
 	"xfsgo"
 	"xfsgo/common"
 	"xfsgo/crypto"
+
+	"github.com/sirupsen/logrus"
 )
 
 type TxPoolHandler struct {
@@ -58,6 +59,7 @@ type StringRawTransaction struct {
 	GasPrice  string `json:"gas_price"`
 	Signature string `json:"signature"`
 	Nonce     string `json:"nonce"`
+	Type      int    `json:"type"`
 }
 
 func (tx *TxPoolHandler) GetPending(_ EmptyArgs, resp **TransactionsResp) error {
@@ -186,5 +188,6 @@ func CoverTransaction(r *StringRawTransaction) (*xfsgo.Transaction, error) {
 		Nonce:     uint64(nonce),
 		Value:     value,
 		Signature: signature,
+		Type:      xfsgo.TxType(r.Type),
 	}), nil
 }

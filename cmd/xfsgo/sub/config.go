@@ -48,6 +48,7 @@ const (
 	defaultProtocolVersion   = uint32(1)
 	defaultLoggerLevel       = "INFO"
 	defaultCliTimeOut        = "180s"
+	defaultNodeSyncFlag      = true
 )
 
 var defaultMinGasPrice = common.DefaultGasPrice()
@@ -150,6 +151,11 @@ func parseConfigStorageParams(v *viper.Viper) storageParams {
 	setupDataDir(&params, params.dataDir)
 	return params
 }
+
+func getDefaultNodeSyncFlag() bool {
+	return defaultNodeSyncFlag
+}
+
 func defaultBootstrapNodes(netid uint32) []string {
 	// hardcoded bootstrap nodes
 	if netid == 1 {
@@ -184,6 +190,8 @@ func parseConfigNodeParams(v *viper.Viper, netid uint32) node.Config {
 	config.P2PBootstraps = v.GetStringSlice("p2pnode.bootstrap")
 	config.P2PStaticNodes = v.GetStringSlice("p2pnode.static")
 	config.ProtocolVersion = uint8(v.GetUint64("protocol.version"))
+	config.NodeSyncFlag = v.GetBool("p2pnode.syncflag")
+
 	if config.RPCConfig.ListenAddr == "" {
 		config.RPCConfig.ListenAddr = defaultNodeRPCListenAddr
 	}
@@ -193,6 +201,11 @@ func parseConfigNodeParams(v *viper.Viper, netid uint32) node.Config {
 	if config.P2PBootstraps == nil || len(config.P2PBootstraps) == 0 {
 		config.P2PBootstraps = defaultBootstrapNodes(netid)
 	}
+
+	if config.NodeSyncFlag || getDefaultNodeSyncFlag() {
+		config.NodeSyncFlag = true
+	}
+
 	return config
 }
 

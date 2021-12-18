@@ -19,6 +19,8 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"xfsgo"
@@ -99,6 +101,18 @@ type GetBlockTxByHashAndIndexArgs struct {
 type GetBlockTxByNumAndIndexArgs struct {
 	Number string `json:"number"`
 	Index  int    `json:"index"`
+}
+
+type SendTransactionArgs struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	GasLimit string `json:"gas_limit"`
+	GasPrice string `json:"gas_price"`
+	Value    string `json:"value"`
+	Nonce    string `json:"nonce"`
+	Code     string `json:"code"`
+	Hash     string `json:"hash"`
+	Type     int    `json:"type"`
 }
 
 func (handler *ChainAPIHandler) GetBlockByNumber(args GetBlockByNumArgs, resp **BlockResp) error {
@@ -211,6 +225,15 @@ func (handler *ChainAPIHandler) GetReceiptByHash(args GetReceiptByHashArgs, resp
 	if err := common.HashCalibrator(args.Hash); err != nil {
 		return xfsgo.NewRPCErrorCause(-32001, err)
 	}
+
+	var from common.Address
+	var to common.Address
+	tx := handler.BlockChain.GetTransactionByTxHash(common.Hex2Hash(args.Hash))
+	if tx != nil {
+		from, _ = tx.FromAddr()
+		to = tx.To
+	}
+
 	dataReceipt := handler.BlockChain.GetReceiptByHash(common.Hex2Hash(args.Hash))
 	if dataReceipt == nil {
 		return xfsgo.NewRPCError(-1006, "Not found")
@@ -220,13 +243,16 @@ func (handler *ChainAPIHandler) GetReceiptByHash(args GetReceiptByHashArgs, resp
 		return xfsgo.NewRPCError(-1006, "Not found")
 	}
 	data := &ReceiptResp{
-		Version:    dataReceipt.Version,
-		Status:     dataReceipt.Status,
-		TxHash:     dataReceipt.TxHash,
-		GasUsed:    dataReceipt.GasUsed,
-		BlockHash:  dataReceiptIndex.BlockHash,
-		BlockIndex: dataReceiptIndex.BlockIndex,
-		TxIndex:    dataReceiptIndex.Index,
+		Version:         dataReceipt.Version,
+		Status:          dataReceipt.Status,
+		TxHash:          dataReceipt.TxHash,
+		ContractAddress: dataReceipt.ContractAddress,
+		GasUsed:         dataReceipt.GasUsed,
+		From:            from,
+		To:              to,
+		BlockHash:       dataReceiptIndex.BlockHash,
+		BlockIndex:      dataReceiptIndex.BlockIndex,
+		TxIndex:         dataReceiptIndex.Index,
 	}
 
 	return coverReceipt(data, resp)
@@ -423,4 +449,118 @@ func (handler *ChainAPIHandler) GetBlockTxByNumAndIndex(args GetBlockTxByNumAndI
 	}
 	tx := gotBlock.Transactions[args.Index]
 	return coverTx2Resp(tx, &resp)
+}
+
+func (handler *WalletHandler) ContractCall(args SendTransactionArgs, resp *string) error {
+	var (
+		err   error
+		stdTx = new(xfsgo.StdTransaction)
+	)
+
+	// Judgment target address cannot be empty
+
+	stdTx.Data = common.Hex2bytes(args.Code)
+
+	// Judge that the transfer amount cannot be blank
+	// if args.Value == "" {
+	// 	return xfsgo.NewRPCError(-1006, "value not be empty")
+	// }
+
+	// Get the wallet address of the initiating transaction
+	var fromAddr common.Address
+	if args.From != "" {
+		// from Verify address rules
+		if err := common.AddrCalibrator(args.From); err != nil {
+			return xfsgo.NewRPCErrorCause(-6001, err)
+		}
+		fromAddr = common.B58ToAddress([]byte(args.From))
+	} else {
+		fromAddr = handler.Wallet.GetDefault()
+	}
+
+	// Take out the private key according to the wallet address of the initiating transaction
+	privateKey, err := handler.Wallet.GetKeyByAddress(fromAddr)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+	// to Verify address rules
+	// if err = common.AddrCalibrator(args.To); err != nil {
+	// 	return xfsgo.NewRPCErrorCause(-6001, err)
+	// }
+	stdTx.To = common.StrB58ToAddress(args.To)
+	if args.GasLimit != "" {
+		stdTx.GasLimit = common.ParseString2BigInt(args.GasLimit)
+	} else {
+		stdTx.GasLimit = handler.TxPendingPool.GetGasLimit()
+	}
+	if args.GasPrice != "" {
+		gaspriceBig, ok := new(big.Int).SetString(args.GasPrice, 10)
+		if !ok {
+			return xfsgo.NewRPCError(-1006, "string to big.Int error")
+		}
+		stdTx.GasPrice = common.NanoCoin2Atto(gaspriceBig)
+	} else {
+		stdTx.GasPrice = handler.TxPendingPool.GetGasPrice()
+	}
+	// stdTx.Value, err = common.BaseCoin2Atto(args.Value)
+	// if err != nil {
+	// 	return xfsgo.NewRPCErrorCause(-1006, err)
+	// }
+	if args.Nonce != "" {
+		nonceBig, ok := new(big.Int).SetString(args.Nonce, 10)
+		if !ok {
+			return xfsgo.NewRPCError(-1006, "string to big.Int error")
+		}
+		stdTx.Nonce = nonceBig.Uint64()
+	} else {
+		state := handler.TxPendingPool.State()
+		stdTx.Nonce = state.GetNonce(fromAddr)
+	}
+	stdTx.Type = xfsgo.TxType(args.Type)
+
+	tx := xfsgo.NewTransactionByStd(stdTx)
+	err = tx.SignWithPrivateKey(privateKey)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+
+	// Set default gas & gas price if none were set
+
+	value := new(big.Int)
+	if args.Value != "" {
+		value, _ = new(big.Int).SetString(args.Value, 10)
+	}
+	data := args.Code
+
+	receipt := handler.BlockChain.GetReceiptByHash(common.Hex2Hash(args.Hash))
+	if receipt == nil {
+		return xfsgo.NewRPCErrorCause(-1006, fmt.Errorf("receipt is nil"))
+	}
+
+	blockIndex := handler.BlockChain.GetReceiptByHashIndex(common.Hex2Hash(args.Hash))
+	if blockIndex == nil {
+		return xfsgo.NewRPCErrorCause(-1006, fmt.Errorf("blockIndex is nil"))
+	}
+	block := handler.BlockChain.GetBlockByHash(blockIndex.BlockHash)
+	if block == nil {
+		return xfsgo.NewRPCErrorCause(-1006, fmt.Errorf("block is nil"))
+	}
+	statetree := handler.BlockChain.StateAt(block.Header.StateRoot)
+
+	msg := xfsgo.NewMessage(fromAddr, receipt.ContractAddress, 0, value, tx.GasLimit.Uint64(), tx.GasPrice, common.Hex2bytes(data), true)
+
+	evm, err := handler.BlockChain.GetEVM(msg, statetree, block.Header)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+
+	max := new(big.Int).SetUint64(math.MaxUint64)
+	pool := new(xfsgo.GasPool)
+	pool.AddGas(max)
+	result, err := xfsgo.ApplyMessage(evm, msg, pool)
+	if err != nil {
+		return nil
+	}
+	*resp = common.Bytes2Hex(result.ReturnData)
+	return nil
 }

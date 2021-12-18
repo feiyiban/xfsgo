@@ -84,6 +84,12 @@ var (
 		Short:                 "Query block synchronization status",
 		RunE:                  getSyncStatus,
 	}
+	chainCallCommand = &cobra.Command{
+		Use:                   "contractcall [options] <contract tx hash> <call code>",
+		DisableFlagsInUseLine: true,
+		Short:                 "Query contract execute result",
+		RunE:                  contractcall,
+	}
 )
 
 // Gets the header of the highest block
@@ -329,6 +335,45 @@ func getSyncStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func contractcall(cmd *cobra.Command, args []string) error {
+
+	if len(args) < 2 {
+		return cmd.Help()
+	}
+
+	config, err := parseClientConfig(cfgFile)
+	if err != nil {
+		return err
+	}
+
+	cli := xfsgo.NewClient(config.rpcClientApiHost, config.rpcClientApiTimeOut)
+	var result string
+	req := &sendTransactionArgs{
+		Hash: args[0],
+		Code: args[1],
+	}
+
+	if fromAddr != "" {
+		req.From = fromAddr
+	}
+	if gasLimit != "" {
+		req.GasLimit = gasLimit
+	}
+	if gasPrice != "" {
+		req.GasPrice = gasPrice
+	}
+	if nonce != "" {
+		req.Nonce = nonce
+	}
+	err = cli.CallMethod(1, "Wallet.ContractCall", req, &result)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	fmt.Println(result)
+	return nil
+}
+
 func init() {
 
 	rootCmd.AddCommand(chainCommand)
@@ -340,4 +385,5 @@ func init() {
 	chainCommand.AddCommand(chainGetTxsByBlockHashCommond)
 	chainCommand.AddCommand(chainGetTxsByBlockNumCommond)
 	chainCommand.AddCommand(chainSyncStatusCommand)
+	chainCommand.AddCommand(chainCallCommand)
 }

@@ -73,7 +73,9 @@ func resetConfig(config *daemonConfig) {
 	}
 	if testnet {
 		config.backendParams.NetworkID = defaultTestNetworkId
-		config.nodeConfig.P2PBootstraps = defaultBootstrapNodes(defaultTestNetworkId)
+		if config.nodeConfig.P2PBootstraps == nil || len(config.nodeConfig.P2PBootstraps) == 0 {
+			config.nodeConfig.P2PBootstraps = defaultBootstrapNodes(defaultTestNetworkId)
+		}
 	}
 	if disableBootstrap {
 		config.nodeConfig.P2PBootstraps = make([]string, 0)
@@ -134,11 +136,12 @@ func runDaemon() error {
 		logrus.Debugf("Set debug mode")
 	}
 	if back, err = backend.NewBackend(stack, &backend.Config{
-		Params:  backparams,
-		ChainDB: chainDb,
-		KeysDB:  keysDb,
-		StateDB: stateDB,
-		ExtraDB: extraDB,
+		Params:       backparams,
+		NodeSyncFlag: config.nodeConfig.NodeSyncFlag,
+		ChainDB:      chainDb,
+		KeysDB:       keysDb,
+		StateDB:      stateDB,
+		ExtraDB:      extraDB,
 	}); err != nil {
 		return err
 	}

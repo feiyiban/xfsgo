@@ -23,9 +23,12 @@ import (
 	"os"
 	"xfsgo"
 	"xfsgo/common"
+	"xfsgo/consensus"
+	"xfsgo/consensus/dpos"
 	"xfsgo/miner"
 	"xfsgo/node"
 	"xfsgo/p2p"
+	"xfsgo/params"
 	"xfsgo/storage/badger"
 
 	"github.com/sirupsen/logrus"
@@ -47,6 +50,7 @@ type Backend struct {
 	eventBus   *xfsgo.EventBus
 	txPool     *xfsgo.TxPool
 	syncMgr    *syncMgr
+	engine     consensus.Engine
 }
 
 type Params struct {
@@ -62,10 +66,11 @@ type Params struct {
 // Config contains the configuration options of the Backend.
 type Config struct {
 	*Params
-	ChainDB *badger.Storage
-	KeysDB  *badger.Storage
-	StateDB *badger.Storage
-	ExtraDB *badger.Storage
+	NodeSyncFlag bool
+	ChainDB      *badger.Storage
+	KeysDB       *badger.Storage
+	StateDB      *badger.Storage
+	ExtraDB      *badger.Storage
 }
 type chainSyncProtocol struct {
 	syncMgr *syncMgr
@@ -83,6 +88,7 @@ func NewBackend(stack *node.Node, config *Config) (*Backend, error) {
 	back := &Backend{
 		config:    config,
 		p2pServer: stack.P2PServer(),
+		engine:    dpos.New(&params.DposConfig{}, config.ChainDB),
 	}
 	back.eventBus = xfsgo.NewEventBus()
 	if config.NetworkID == uint32(1) {
@@ -138,10 +144,11 @@ func NewBackend(stack *node.Node, config *Config) (*Backend, error) {
 		Coinbase:   back.wallet.GetDefault(),
 		Numworkers: config.Numworkers,
 	}
+
 	back.miner = miner.NewMiner(minerconfig,
 		back.config.StateDB, back.blockchain,
 		back.eventBus, back.txPool,
-		config.MinGasPrice, common.TxPoolGasLimit)
+		config.MinGasPrice, common.TxPoolGasLimit, back.engine, config.ChainDB)
 
 	logrus.Debugf("Initial miner: coinbase=%s, gasPrice=%s, gasLimit=%s",
 		minerconfig.Coinbase.B58String(), config.MinGasPrice, common.TxPoolGasLimit)
@@ -156,7 +163,7 @@ func NewBackend(stack *node.Node, config *Config) (*Backend, error) {
 	}
 	back.syncMgr = newSyncMgr(
 		back.config.ProtocolVersion, back.config.NetworkID,
-		back.blockchain, back.eventBus, back.txPool)
+		back.blockchain, back.eventBus, back.txPool, back.config.NodeSyncFlag)
 	back.p2pServer.Bind(&chainSyncProtocol{
 		syncMgr: back.syncMgr,
 	})

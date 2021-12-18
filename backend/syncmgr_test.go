@@ -144,7 +144,7 @@ func newTestTxPool(chain chainMgr, gasLimit, gasPrice *big.Int) *xfsgo.TxPool {
 	return xfsgo.NewTxPool(statefn, gasLimitFn, gasPrice, testEventBus)
 }
 func newSyncMgrTester(t *testing.T, chain chainMgr, txPool *xfsgo.TxPool) *syncMgrTester {
-	mgr := newSyncMgr(testVersion, testNetwork, chain, testEventBus, txPool)
+	mgr := newSyncMgr(testVersion, testNetwork, chain, testEventBus, txPool, false)
 	return &syncMgrTester{
 		t:   t,
 		mgr: mgr,

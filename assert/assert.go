@@ -96,6 +96,18 @@ func Equal(t *testing.T, got, want interface{}) {
 	}
 }
 
+func True(t *testing.T, value bool, msgAndArgs ...interface{}) bool {
+	if !value {
+		// if h, ok := t.(tHelper); ok {
+		// 	h.Helper()
+		// }
+		t.Fatalf("Should be true:%v\n", msgAndArgs...)
+		return false
+	}
+
+	return true
+
+}
 func VerifyAddress(t *testing.T, addr common.Address) {
 	if !crypto.VerifyAddress(addr) {
 		t.Fatalf("got checksum: %v not verify\n", addr.Checksum())
@@ -107,6 +119,11 @@ func AddressEq(t *testing.T, got common.Address, want common.Address) {
 	}
 }
 
+func Nil(t *testing.T, err error) {
+	t.Fatalf(err.Error())
+}
+
+// func NotNil
 func HashEqual(t *testing.T, got, want common.Hash) {
 	if bytes.Compare(got.Bytes(), want.Bytes()) != common.Zero {
 		t.Fatalf("got: %x want: %x\n", got, want)

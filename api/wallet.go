@@ -50,15 +50,6 @@ type SetDefaultAddrArgs struct {
 // 	Value    string `json:"value"`
 // }
 
-type SendTransactionArgs struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	GasLimit string `json:"gas_limit"`
-	GasPrice string `json:"gas_price"`
-	Value    string `json:"value"`
-	Nonce    string `json:"nonce"`
-}
-
 type SetGasLimitArgs struct {
 	Gas string `json:"gas"`
 }
@@ -204,10 +195,6 @@ func (handler *WalletHandler) SendTransaction(args SendTransactionArgs, resp *st
 		err   error
 		stdTx = new(xfsgo.StdTransaction)
 	)
-	// Judgment target address cannot be empty
-	if args.To == "" {
-		return xfsgo.NewRPCError(-1006, "to addr not be empty")
-	}
 	// Judge that the transfer amount cannot be blank
 	if args.Value == "" {
 		return xfsgo.NewRPCError(-1006, "value not be empty")
@@ -263,6 +250,8 @@ func (handler *WalletHandler) SendTransaction(args SendTransactionArgs, resp *st
 		state := handler.TxPendingPool.State()
 		stdTx.Nonce = state.GetNonce(fromAddr)
 	}
+	stdTx.Type = xfsgo.TxType(args.Type)
+
 	tx := xfsgo.NewTransactionByStd(stdTx)
 	err = tx.SignWithPrivateKey(privateKey)
 	if err != nil {
@@ -272,6 +261,96 @@ func (handler *WalletHandler) SendTransaction(args SendTransactionArgs, resp *st
 	if err != nil {
 		return xfsgo.NewRPCErrorCause(-1006, err)
 	}
+
+	// Judgment target address cannot be empty
+	if args.To == "" {
+		return xfsgo.NewRPCError(-1006, "to addr not be empty")
+	}
+
+	result := tx.Hash()
+	*resp = result.Hex()
+	return nil
+}
+
+func (handler *WalletHandler) Contract(args SendTransactionArgs, resp *string) error {
+	var (
+		err   error
+		stdTx = new(xfsgo.StdTransaction)
+	)
+
+	// Judgment target address cannot be empty
+	stdTx.To = common.B58ToAddress(common.Hex2bytes(args.To))
+
+	code := common.Hex2bytes(args.Code)
+	stdTx.Data = code[:]
+
+	// Judge that the transfer amount cannot be blank
+	if args.Value == "" {
+		return xfsgo.NewRPCError(-1006, "value not be empty")
+	}
+
+	// Get the wallet address of the initiating transaction
+	var fromAddr common.Address
+	if args.From != "" {
+		// from Verify address rules
+		if err := common.AddrCalibrator(args.From); err != nil {
+			return xfsgo.NewRPCErrorCause(-6001, err)
+		}
+		fromAddr = common.B58ToAddress([]byte(args.From))
+	} else {
+		fromAddr = handler.Wallet.GetDefault()
+	}
+
+	// Take out the private key according to the wallet address of the initiating transaction
+	privateKey, err := handler.Wallet.GetKeyByAddress(fromAddr)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+	// to Verify address rules
+	// if err = common.AddrCalibrator(args.To); err != nil {
+	// 	return xfsgo.NewRPCErrorCause(-6001, err)
+	// }
+	stdTx.To = common.StrB58ToAddress(args.To)
+	if args.GasLimit != "" {
+		stdTx.GasLimit = common.ParseString2BigInt(args.GasLimit)
+	} else {
+		stdTx.GasLimit = common.TxGas
+	}
+	if args.GasPrice != "" {
+		gaspriceBig, ok := new(big.Int).SetString(args.GasPrice, 10)
+		if !ok {
+			return xfsgo.NewRPCError(-1006, "string to big.Int error")
+		}
+		stdTx.GasPrice = common.NanoCoin2Atto(gaspriceBig)
+	} else {
+		stdTx.GasPrice = common.DefaultGasPrice()
+	}
+	stdTx.Value, err = common.BaseCoin2Atto(args.Value)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+	if args.Nonce != "" {
+		nonceBig, ok := new(big.Int).SetString(args.Nonce, 10)
+		if !ok {
+			return xfsgo.NewRPCError(-1006, "string to big.Int error")
+		}
+		stdTx.Nonce = nonceBig.Uint64()
+	} else {
+		state := handler.TxPendingPool.State()
+		stdTx.Nonce = state.GetNonce(fromAddr)
+	}
+	stdTx.Type = xfsgo.TxType(args.Type)
+
+	tx := xfsgo.NewTransactionByStd(stdTx)
+	err = tx.SignWithPrivateKey(privateKey)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+	err = handler.TxPendingPool.Add(tx)
+	if err != nil {
+		return xfsgo.NewRPCErrorCause(-1006, err)
+	}
+
 	result := tx.Hash()
 	*resp = result.Hex()
 	return nil

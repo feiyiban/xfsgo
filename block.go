@@ -52,6 +52,28 @@ type BlockHeader struct {
 	Bits       uint32 `json:"bits"`
 	Nonce      uint32 `json:"nonce"`
 	ExtraNonce uint64 `json:"extranonce"`
+
+	Difficulty  *big.Int                    `json:"difficulty"`
+	MixDigest   common.Hash                 `json:"mixHash"`
+	Extra       []byte                      `json:"extraData"`
+	Validator   common.Address              `json:"validator"`
+	DposContext *avlmerkle.DposContextProto `json:"dposContext"`
+}
+
+func (bHead *BlockHeader) Number() *big.Int {
+	return big.NewInt(int64(bHead.Height))
+}
+
+func (bHead *BlockHeader) HeaderNonce() *big.Int {
+	return big.NewInt(int64(bHead.Nonce))
+}
+
+func (bHead *BlockHeader) Root() common.Hash {
+	return bHead.StateRoot
+}
+
+func (bHead *BlockHeader) Time() *big.Int {
+	return new(big.Int).SetUint64(bHead.Height)
 }
 
 // BlockHeader hash
@@ -93,9 +115,10 @@ func (bHead *BlockHeader) String() string {
 }
 
 type Block struct {
-	Header       *BlockHeader   `json:"header"`
-	Transactions []*Transaction `json:"transactions"`
-	Receipts     []*Receipt     `json:"receipts"`
+	DposContext  *avlmerkle.DposContext `json:"dposContext"`
+	Header       *BlockHeader           `json:"header"`
+	Transactions []*Transaction         `json:"transactions"`
+	Receipts     []*Receipt             `json:"receipts"`
 }
 
 // NewBlock creates a new block. The input data, txs and receipts are copied,
@@ -132,7 +155,7 @@ func (b *Block) GetHeader() *BlockHeader {
 // CalcTxsRootHash returns the root hash of transactions merkle tree
 // by creating a avl merkle tree with transactions as nodes of the tree.
 func CalcTxsRootHash(txs []*Transaction) common.Hash {
-	tree := avlmerkle.NewTree(nil, nil)
+	tree := avlmerkle.NewTree(nil, nil, nil)
 	for _, tx := range txs {
 		data, _ := rawencode.Encode(tx)
 		txHash := ahash.SHA256(data)
@@ -145,7 +168,7 @@ func CalcTxsRootHash(txs []*Transaction) common.Hash {
 // by creating a avl merkle tree with receipts as nodes of the tree.
 // This function is for contract code to check the execution result quickly.
 func CalcReceiptRootHash(recs []*Receipt) common.Hash {
-	tree := avlmerkle.NewTree(nil, nil)
+	tree := avlmerkle.NewTree(nil, nil, nil)
 	for _, rec := range recs {
 		data, _ := rawencode.Encode(rec)
 		recHash := ahash.SHA256(data)
@@ -186,6 +209,8 @@ func (b *Block) Height() uint64 {
 	return b.Header.Height
 }
 
+func (b *Block) DposCtx() *avlmerkle.DposContext { return b.DposContext }
+
 func (b *Block) StateRoot() common.Hash {
 	return b.Header.StateRoot
 }
@@ -224,6 +249,23 @@ func (b *Block) UpdateNonce(nonce uint32) {
 
 func (b *Block) Timestamp() uint64 {
 	return b.Header.Timestamp
+}
+func (b *Block) Time() *big.Int {
+	return new(big.Int).SetUint64(b.Header.Timestamp)
+}
+
+// WithSeal returns a new block with the data from b but the header replaced with
+// the sealed one.
+func (b *Block) WithSeal(header *BlockHeader) *Block {
+	cpy := *header
+
+	return &Block{
+		Header:       &cpy,
+		Transactions: b.Transactions,
+		Receipts:     b.Receipts,
+		// add dposcontext
+		DposContext: b.DposContext,
+	}
 }
 
 func (b *Block) String() string {

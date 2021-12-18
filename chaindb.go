@@ -17,7 +17,6 @@
 package xfsgo
 
 import (
-	"bytes"
 	"encoding/binary"
 	"xfsgo/common"
 	"xfsgo/common/rawencode"
@@ -54,7 +53,9 @@ func (db *chainDB) GetBlockHeaderByHash(hash common.Hash) *BlockHeader {
 		return nil
 	}
 	blockHeader := &BlockHeader{}
+
 	if err := rawencode.Decode(val, blockHeader); err != nil {
+		logrus.Debugf("Decode:%v", err)
 		return nil
 	}
 	return blockHeader
@@ -83,30 +84,25 @@ func (db *chainDB) GetOptimumHeightBHeader() *BlockHeader {
 	return db.GetBlockHeaderByHash(hash)
 }
 
-// GetBlocksByNumber
-func (db *chainDB) GetBlocksByNumber(num uint64) []*BlockHeader {
+// GetBlockHeaderByHashAndHeight
+func (db *chainDB) GetBlocksByHashAndHeight(headerHash common.Hash, height uint64) *BlockHeader {
 	var heightbytes = make([]byte, 8)
-	binary.BigEndian.PutUint64(heightbytes, num)
+	binary.BigEndian.PutUint64(heightbytes, height)
+	// bnh:<height_64bits><hash>
 	key := append(blockHeightHashPre, heightbytes...)
-	blks := make([]*BlockHeader, 0)
-	db.storage.For(func(k []byte, v []byte) {
-		if len(k) < len(blockHeightHashPre)+8 {
-			return
-		}
-		gotkeypre := k[:len(blockHeightHashPre)+8]
-		if !bytes.Equal(gotkeypre, key) {
-			return
-		}
-		blockHeader := &BlockHeader{}
-		if err := rawencode.Decode(v, blockHeader); err != nil {
-			return
-		}
-		blks = append(blks, blockHeader)
-	})
-	if len(blks) == 0 {
+	key = append(key, headerHash[:]...)
+	val, err := db.storage.GetData(key)
+	if err != nil {
+		logrus.Errorf("Remove blockHeader by height and hash err: %s", err)
 		return nil
 	}
-	return blks
+
+	blockHeader := &BlockHeader{}
+	if err := rawencode.Decode(val, blockHeader); err != nil {
+		logrus.Debugf("GetBlocksByHashAndHeight Decode:%v", err)
+		return nil
+	}
+	return blockHeader
 }
 
 // Write BlockHeader links Hash to chainDB

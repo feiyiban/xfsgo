@@ -51,6 +51,7 @@ type Config struct {
 	P2PStaticNodes   []string
 	NodeDBPath       string
 	RPCConfig        *xfsgo.RPCConfig
+	NodeSyncFlag     bool
 }
 
 const datadirPrivateKey = "NODEKEY"

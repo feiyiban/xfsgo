@@ -131,6 +131,65 @@ func (n *TreeNode) rehash() {
 	n.id = hash
 }
 
+func (n *TreeNode) Hash() common.Hash {
+	return common.Bytes2Hash(n.id)
+}
+
+func (n *TreeNode) Value() []byte {
+	return n.value
+}
+
+func (n *TreeNode) Key() []byte {
+	return n.key
+}
+
+func (n *TreeNode) remove(t *Tree, key []byte) *TreeNode {
+	// 找不到key对应node,返回0,nil
+	if n == nil {
+		return nil
+	}
+	var retNode *TreeNode
+	// var isRemove int
+	switch {
+	case bytes.Compare(key, n.key) < common.Zero:
+		n.leftNode = n.leftNode.remove(t, key)
+		retNode = n
+	case bytes.Compare(key, n.key) > common.Zero:
+		n.rightNode = n.rightNode.remove(t, key)
+		retNode = n
+	default:
+		switch {
+		case n.leftNode == nil: // 待删除节点左子树为空的情况
+			retNode = n.rightNode
+		case n.rightNode == nil: // 待删除节点右子树为空的情况
+			retNode = n.leftNode
+		default:
+			// 待删除节点左右子树均不为空的情况
+			// 找到比待删除节点大的最小节点,即右子树的最小节点
+			retNode := n.rightNode.getMinNode()
+			// TODO: 这步好好理解,维护平衡性
+			retNode.rightNode = n.rightNode.remove(t, key)
+			retNode.left = n.left
+		}
+	}
+
+	// 前面删除节点后,返回retNode有可能为空,这样在执行下面的语句会产生异常，加这步判定避免异常
+	if retNode == nil {
+		return retNode
+	}
+
+	retNode = retNode.rebalance(t)
+	return retNode
+}
+
+// 找出以nd为根节点中最小值的节点
+func (n *TreeNode) getMinNode() *TreeNode {
+	if n.left == nil {
+		return n
+	}
+	return n.leftNode.getMinNode()
+}
+
 func (n *TreeNode) insert(t *Tree, k, v []byte) *TreeNode {
 	if n.isLeaf() {
 		// If the key values are consistent, update the value

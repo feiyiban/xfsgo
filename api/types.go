@@ -100,13 +100,16 @@ type MinerStatusResp struct {
 }
 
 type ReceiptResp struct {
-	Version    uint32      `json:"version"`
-	Status     uint32      `json:"status"`
-	TxHash     common.Hash `json:"tx_hash"`
-	GasUsed    *big.Int    `json:"gas_used"`
-	BlockHash  common.Hash `json:"block_hash"`
-	BlockIndex uint64      `json:"block_index"`
-	TxIndex    uint64      `json:"tx_index"`
+	Version         uint32         `json:"version"`
+	Status          uint32         `json:"status"`
+	TxHash          common.Hash    `json:"tx_hash"`
+	ContractAddress common.Address `json:"contractaddress"`
+	GasUsed         *big.Int       `json:"gas_used"`
+	From            common.Address `json:"from"`
+	To              common.Address `json:"to"`
+	BlockHash       common.Hash    `json:"block_hash"`
+	BlockIndex      uint64         `json:"block_index"`
+	TxIndex         uint64         `json:"tx_index"`
 }
 
 type ChainStatusResp struct {

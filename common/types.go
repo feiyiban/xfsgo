@@ -24,14 +24,14 @@ import (
 )
 
 const (
-	addrLen               = 25
-	hashLen               = 32
+	AddrLen               = 25
+	HashLen               = 32
 	DefaultAddressVersion = 1
 )
 
 type (
-	Hash    [hashLen]byte
-	Address [addrLen]byte
+	Hash    [HashLen]byte
+	Address [AddrLen]byte
 )
 
 var (
@@ -49,7 +49,11 @@ func Hex2bytes(s string) []byte {
 		if len(s)%2 == 1 {
 			s = "0" + s
 		}
-		bs, _ := hex.DecodeString(s)
+		bs, err := hex.DecodeString(s)
+		if err != nil {
+			fmt.Printf("Hex2bytes:%v", err)
+			return nil
+		}
 		return bs
 	}
 	return nil
@@ -96,9 +100,9 @@ func Hex2Address(s string) Address {
 
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
-		b = b[len(b)-addrLen:]
+		b = b[len(b)-AddrLen:]
 	}
-	copy(a[addrLen-len(b):], b)
+	copy(a[AddrLen-len(b):], b)
 }
 
 func (a *Address) Hex() string {
@@ -130,13 +134,13 @@ func (a *Address) Version() uint8 {
 	return a[0]
 }
 func (a *Address) PubKeyHash() []byte {
-	return a[1 : addrLen-AddrCheckSumLen]
+	return a[1 : AddrLen-AddrCheckSumLen]
 }
 func (a *Address) Payload() []byte {
-	return a[:addrLen-AddrCheckSumLen]
+	return a[:AddrLen-AddrCheckSumLen]
 }
 func (a *Address) Checksum() []byte {
-	return a[1+(addrLen-AddrCheckSumLen)-1:]
+	return a[1+(AddrLen-AddrCheckSumLen)-1:]
 }
 
 func (a *Address) B58String() string {
@@ -152,7 +156,7 @@ func (h *Hash) MarshalJSON() ([]byte, error) {
 }
 
 func (h *Hash) UnmarshalJSON(data []byte) error {
-	if data == nil || len(data) < hashLen {
+	if data == nil || len(data) < HashLen {
 		h.SetBytes([]byte{0})
 		return nil
 	}
@@ -178,7 +182,7 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 func AddrCalibrator(val string) error {
 	addr := B58Decode([]byte(val))
 
-	if len(addr) != addrLen {
+	if len(addr) != AddrLen {
 		return errors.New("parameter byte length rule failed")
 	}
 	return nil
@@ -186,7 +190,7 @@ func AddrCalibrator(val string) error {
 
 func HashCalibrator(val string) error {
 	hash := Hex2bytes(val)
-	if len(hash) != hashLen {
+	if len(hash) != HashLen {
 		return errors.New("parameter byte length rule failed")
 	}
 	return nil

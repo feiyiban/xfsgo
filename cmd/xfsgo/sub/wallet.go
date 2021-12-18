@@ -26,9 +26,11 @@ import (
 
 var (
 	fromAddr      string
+	toAddr        string
 	gasLimit      string
 	gasPrice      string
 	nonce         string
+	txtype        int
 	walletCommand = &cobra.Command{
 		Use:                   "wallet <command> [options]",
 		DisableFlagsInUseLine: true,
@@ -91,6 +93,12 @@ var (
 		Short:                 "Send the transaction to the specified destination address",
 		RunE:                  sendTransaction,
 	}
+	walletContractCommand = &cobra.Command{
+		Use:                   "contract [options] <opcode> <value>",
+		DisableFlagsInUseLine: true,
+		Short:                 "contract the transaction to the specified destination address",
+		RunE:                  contract,
+	}
 )
 
 func sendTransaction(cmd *cobra.Command, args []string) error {
@@ -124,6 +132,49 @@ func sendTransaction(cmd *cobra.Command, args []string) error {
 		req.Nonce = nonce
 	}
 	err = cli.CallMethod(1, "Wallet.SendTransaction", req, &result)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	fmt.Println(result)
+	return nil
+}
+
+func contract(cmd *cobra.Command, args []string) error {
+
+	if len(args) < 2 {
+		return cmd.Help()
+	}
+
+	config, err := parseClientConfig(cfgFile)
+	if err != nil {
+		return err
+	}
+
+	cli := xfsgo.NewClient(config.rpcClientApiHost, config.rpcClientApiTimeOut)
+	var result string
+	req := &sendTransactionArgs{
+		Code:  args[0],
+		Value: args[1],
+	}
+
+	if fromAddr != "" {
+		req.From = fromAddr
+	}
+
+	if toAddr != "" {
+		req.To = toAddr
+	}
+	if gasLimit != "" {
+		req.GasLimit = gasLimit
+	}
+	if gasPrice != "" {
+		req.GasPrice = gasPrice
+	}
+	if nonce != "" {
+		req.Nonce = nonce
+	}
+	err = cli.CallMethod(1, "Wallet.Contract", req, &result)
 	if err != nil {
 		fmt.Println(err)
 		return nil
@@ -302,11 +353,20 @@ func init() {
 	walletCommand.AddCommand(walletExportCommand)
 	walletCommand.AddCommand(walletGetAddrDefCommand)
 	walletCommand.AddCommand(walletTransferCommand)
+
 	mFlags := walletTransferCommand.PersistentFlags()
 	mFlags.StringVarP(&fromAddr, "address", "a", "", "Set from address")
 	mFlags.StringVarP(&gasPrice, "gasprice", "", "", "Set transaction gas price")
 	mFlags.StringVarP(&gasLimit, "gaslimit", "", "", "Set transaction gas limit")
 	mFlags.StringVarP(&nonce, "nonce", "", "", "Set transaction nonce")
+	mFlags.IntVarP(&txtype, "txtype", "", 0, "transaction type, distinguishing election voting")
+	walletCommand.AddCommand(walletContractCommand)
+	mContractFlags := walletContractCommand.PersistentFlags()
+	mContractFlags.StringVarP(&fromAddr, "fromaddress", "a", "", "Set from address")
+	mContractFlags.StringVarP(&toAddr, "toaddress", "t", "", "Set to address")
+	mContractFlags.StringVarP(&gasPrice, "gasprice", "", "", "Set transaction gas price")
+	mContractFlags.StringVarP(&gasLimit, "gaslimit", "", "", "Set transaction gas limit")
+	mContractFlags.StringVarP(&nonce, "nonce", "", "", "Set transaction nonce")
 	walletCommand.AddCommand(walletSetAddrDefCommand)
 	rootCmd.AddCommand(walletCommand)
 }

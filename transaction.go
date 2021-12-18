@@ -35,6 +35,17 @@ import (
 
 // var defaultGasPrice = new(big.Int).SetUint64(1)    //150000000000
 
+// transaction type
+type TxType uint8
+
+const (
+	Binary TxType = iota
+	LoginCandidate
+	LogoutCandidate
+	Delegate
+	UnDelegate
+)
+
 // Transaction type.
 type Transaction struct {
 	Version   uint32         `json:"version"`
@@ -45,6 +56,7 @@ type Transaction struct {
 	Nonce     uint64         `json:"nonce"`
 	Value     *big.Int       `json:"value"`
 	Signature []byte         `json:"signature"`
+	Type      TxType         `json:"type"`
 }
 
 type StdTransaction struct {
@@ -56,6 +68,7 @@ type StdTransaction struct {
 	Nonce     uint64         `json:"nonce"`
 	Value     *big.Int       `json:"value"`
 	Signature []byte         `json:"signature"`
+	Type      TxType         `json:"type"`
 }
 
 func NewTransaction(to common.Address, gasLimit, gasPrice *big.Int, value *big.Int) *Transaction {
@@ -79,6 +92,7 @@ func NewTransactionByStd(tx *StdTransaction) *Transaction {
 		Nonce:     tx.Nonce,
 		Value:     new(big.Int),
 		Signature: tx.Signature,
+		Type:      tx.Type,
 	}
 	if tx.Version != result.Version {
 		result.Version = tx.Version
@@ -176,14 +190,13 @@ func (t *Transaction) Hash() common.Hash {
 	return common.Bytes2Hash(ahash.SHA256([]byte(enc)))
 }
 
-func (t *Transaction) clone() *Transaction {
-	p := *t
-	return &p
-}
-func (t *Transaction) copyTrim() *Transaction {
-	nt := t.clone()
-	nt.Signature = nil
-	return nt
+func (t *Transaction) From() common.Address {
+	pub, err := t.publicKey()
+	if err != nil {
+		return common.Address{}
+	}
+	addr := crypto.DefaultPubKey2Addr(*pub)
+	return addr
 }
 
 func sortAndEncodeMap(data map[string]string) string {
@@ -338,3 +351,56 @@ func SortByPriceAndNonce(txs []*Transaction) {
 		txs = append(txs, best)
 	}
 }
+
+// MessageImp is a fully derived transaction and implements Message
+type MessageImp struct {
+	to       common.Address
+	from     common.Address
+	nonce    uint64
+	amount   *big.Int
+	gasLimit uint64
+	gasPrice *big.Int
+	isFake   bool
+	data     []byte
+}
+
+func NewMessage(from common.Address, to common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, isFake bool) MessageImp {
+	return MessageImp{
+		from:     from,
+		to:       to,
+		nonce:    nonce,
+		amount:   amount,
+		gasLimit: gasLimit,
+		gasPrice: gasPrice,
+		isFake:   isFake,
+		data:     data,
+	}
+}
+
+// AsMessage returns the transaction as a core.Message.
+func (tx *Transaction) AsMessage() (MessageImp, error) {
+	msg := MessageImp{
+		nonce:    tx.Nonce,
+		gasLimit: tx.GasLimit.Uint64(),
+		gasPrice: tx.GasPrice,
+		to:       tx.To,
+		amount:   tx.Value,
+		data:     tx.Data,
+	}
+	// // If baseFee provided, set gasPrice to effectiveGasPrice.
+	// if baseFee != nil {
+	// 	msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
+	// }
+	var err error
+	msg.from, err = tx.FromAddr()
+	return msg, err
+}
+
+func (m MessageImp) From() common.Address { return m.from }
+func (m MessageImp) To() common.Address   { return m.to }
+func (m MessageImp) GasPrice() *big.Int   { return m.gasPrice }
+func (m MessageImp) Value() *big.Int      { return m.amount }
+func (m MessageImp) Gas() uint64          { return m.gasLimit }
+func (m MessageImp) Nonce() uint64        { return m.nonce }
+func (m MessageImp) Data() []byte         { return m.data }
+func (m MessageImp) IsFake() bool         { return m.isFake }

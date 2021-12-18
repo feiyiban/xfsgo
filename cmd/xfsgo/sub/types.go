@@ -65,6 +65,8 @@ type sendTransactionArgs struct {
 	GasPrice string `json:"gas_price"`
 	Value    string `json:"value"`
 	Nonce    string `json:"nonce"`
+	Code     string `json:"code"`
+	Hash     string `json:"hash"`
 }
 
 type getBlockByNumArgs struct {

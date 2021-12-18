@@ -31,7 +31,7 @@ import (
 
 var (
 	MainNetGenesisBits = uint32(267386909)
-	TestNetGenesisBits = uint32(4278190109)
+	TestNetGenesisBits = uint32(4278190110)
 	GenesisBits        = MainNetGenesisBits
 )
 
