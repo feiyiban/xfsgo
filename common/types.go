@@ -147,6 +147,10 @@ func (a *Address) B58String() string {
 	return string(a.B58())
 }
 
+func (a *Address) Hash() Hash {
+	return Bytes2Hash(a[:])
+}
+
 func (a *Address) Equals(b Address) bool {
 	return bytes.Compare(a.Bytes(), b.Bytes()) == Zero
 }

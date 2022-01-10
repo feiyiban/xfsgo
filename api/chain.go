@@ -102,6 +102,10 @@ type GetBlockTxByNumAndIndexArgs struct {
 	Number string `json:"number"`
 	Index  int    `json:"index"`
 }
+type GetBlockHashesArgs struct {
+	Number string `json:"number"`
+	Count  string `json:"count"`
+}
 
 type SendTransactionArgs struct {
 	From     string `json:"from"`
@@ -127,6 +131,25 @@ func (handler *ChainAPIHandler) GetBlockByNumber(args GetBlockByNumArgs, resp **
 	}
 	gotBlock := handler.BlockChain.GetBlockByNumber(last)
 	return coverBlock2Resp(gotBlock, resp)
+}
+func (handler *ChainAPIHandler) GetBlockHashes(args GetBlockHashesArgs, resp *[]common.Hash) error {
+	start, _ := strconv.ParseUint(args.Number, 10, 64)
+	count, _ := strconv.ParseUint(args.Count, 10, 64)
+	last := handler.BlockChain.GetBlockByNumber(start + count - 1)
+	if last == nil {
+		last = handler.BlockChain.GetHead()
+		count = last.Height() - start + 1
+	}
+	if last.Height() < start {
+		return nil
+	}
+	hashes := []common.Hash{last.HeaderHash()}
+	hashes = append(hashes, handler.BlockChain.GetBlockHashesFromHash(last.HeaderHash(), count-1)...)
+	for i := 0; i < len(hashes)/2; i++ {
+		hashes[i], hashes[len(hashes)-1-i] = hashes[len(hashes)-1-i], hashes[i]
+	}
+	*resp = hashes
+	return nil
 }
 
 // func (handler *ChainAPIHandler) GetBlocksByNumber(args GetBlockByNumArgs, resp **BlocksResp) error {

@@ -25,7 +25,7 @@ import (
 	"xfsgo/crypto"
 	"xfsgo/params"
 	"xfsgo/test"
-	"xfsgo/vm"
+	"xfsgo/vm/evm"
 
 	"xfsgo/common"
 )
@@ -43,7 +43,7 @@ type Config struct {
 	GasPrice    *big.Int
 	Value       *big.Int
 	Debug       bool
-	EVMConfig   vm.Config
+	EVMConfig   evm.Config
 	BaseFee     *big.Int
 
 	State     *xfsgo.StateTree
@@ -118,7 +118,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *xfsgo.StateTree, error) 
 	var (
 		address = common.Bytes2Address([]byte("contract"))
 		vmenv   = NewEnv(cfg)
-		sender  = vm.AccountRef(cfg.Origin)
+		sender  = evm.AccountRef(cfg.Origin)
 	)
 	// if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
 	// 	cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules))
@@ -150,7 +150,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	}
 	var (
 		vmenv  = NewEnv(cfg)
-		sender = vm.AccountRef(cfg.Origin)
+		sender = evm.AccountRef(cfg.Origin)
 	)
 	// if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
 	// 	cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)

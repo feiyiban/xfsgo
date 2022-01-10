@@ -37,7 +37,7 @@ import (
 	"xfsgo"
 	"xfsgo/common"
 
-	"xfsgo/vm"
+	"xfsgo/vm/evm"
 )
 
 var (
@@ -91,14 +91,14 @@ func TestNewEVMBlockContext(t *testing.T) {
 	testBalance := stateTree.GetBalance(fromAddress)
 	fmt.Println("init testBalance =", testBalance)
 
-	logConfig := vm.LogConfig{}
-	structLogger := vm.NewStructLogger(&logConfig)
-	vmConfig := vm.Config{Debug: true, Tracer: structLogger /*, JumpTable: vm.NewByzantiumInstructionSet()*/}
+	logConfig := evm.LogConfig{}
+	structLogger := evm.NewStructLogger(&logConfig)
+	vmConfig := evm.Config{Debug: true, Tracer: structLogger /*, JumpTable: vm.NewByzantiumInstructionSet()*/}
 
-	evm := vm.NewEVM(ctx, txContext, stateTree, vmConfig)
-	contractRef := vm.AccountRef(fromAddress)
+	evm_ := evm.NewEVM(ctx, txContext, stateTree, vmConfig)
+	contractRef := evm.AccountRef(fromAddress)
 	fmt.Println(fromAddress, contractRef)
-	contractCode, contractAddr, gasLeftover, err := evm.Create(contractRef, common.Hex2bytes(data), stateTree.GetBalance(fromAddress).Uint64(), big.NewInt(1000000000))
+	contractCode, contractAddr, gasLeftover, err := evm_.Create(contractRef, common.Hex2bytes(data), stateTree.GetBalance(fromAddress).Uint64(), big.NewInt(1000000000))
 	fmt.Printf("err:%v\n", err)
 
 	fmt.Printf("-------contractAddr:%v,gasLeftover:%v\n", contractAddr.Hex(), gasLeftover)
@@ -111,7 +111,7 @@ func TestNewEVMBlockContext(t *testing.T) {
 
 	input := "165c4a1600000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004"
 
-	outputs1, gasLeftover1, vmerr := evm.Call(contractRef, contractAddr, common.Hex2bytes(input), stateTree.GetBalance(fromAddress).Uint64(), big.NewInt(0))
+	outputs1, gasLeftover1, vmerr := evm_.Call(contractRef, contractAddr, common.Hex2bytes(input), stateTree.GetBalance(fromAddress).Uint64(), big.NewInt(0))
 
 	if vmerr != nil {
 		t.Fatal(vmerr)

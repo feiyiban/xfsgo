@@ -31,7 +31,7 @@ var (
 	delPeerCommand = &cobra.Command{
 		Use:                   "delpeer <node_id> [options]",
 		DisableFlagsInUseLine: true,
-		Short:                 "Add peer-to-peer link",
+		Short:                 "del peer-to-peer link",
 		RunE:                  delPeer,
 	}
 	getNodeIdCommand = &cobra.Command{

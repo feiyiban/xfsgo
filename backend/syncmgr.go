@@ -484,7 +484,7 @@ func (mgr *syncMgr) processQueue() {
 	}
 }
 
-func (mgr *syncMgr) fetchBlocks(from uint64) error {
+func (mgr *syncMgr) fetchBlocks(from uint64, id discover.NodeId) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	sendFetchRequest := func(p syncpeer, request *fetchBlockRequest) error {
@@ -502,7 +502,7 @@ func (mgr *syncMgr) fetchBlocks(from uint64) error {
 	finished := false
 
 	for {
-		mgr.report(from, time.Now())
+		mgr.report(from, time.Now(), id)
 		select {
 		case <-mgr.cancelCh:
 			return errCancelBlockFetch
@@ -576,7 +576,7 @@ func (mgr *syncMgr) recordSync(num uint64) {
 		mgr.lastRecord = num
 	}
 }
-func (mgr *syncMgr) report(v uint64, t time.Time) {
+func (mgr *syncMgr) report(v uint64, t time.Time, id discover.NodeId) {
 	if t.Sub(mgr.lastReport) < (1 * time.Second) {
 		return
 	}
@@ -586,7 +586,7 @@ func (mgr *syncMgr) report(v uint64, t time.Time) {
 		total := mgr.lastRecord - v
 		completed := nowHeight - (v - 1)
 		progress := float64(completed) / float64(total) * float64(100)
-		logrus.Infof("Sync in progress: synced=%.2f%%", progress)
+		logrus.Infof("Sync in progress: synced=%.2f%%, id=%x", progress, id[len(id)-4:])
 	}
 	mgr.lastReport = t
 }
@@ -615,13 +615,14 @@ func (mgr *syncMgr) syncWithPeer(p syncpeer) error {
 	}
 	_ = mgr.chain.SetBoundaries(number, p.Height())
 	mgr.recordSync(p.Height())
+
 	logrus.Debugf("Successfully find ancestor: number=%d, peerId=%x", number, pId[len(pId)-4:])
 	errc := make(chan error, 2)
 	go func() {
 		errc <- mgr.fetchHashes(p, number+1)
 	}()
 	go func() {
-		errc <- mgr.fetchBlocks(number + 1)
+		errc <- mgr.fetchBlocks(number+1, pId)
 	}()
 	if err = <-errc; err != nil {
 		mgr.cancel()

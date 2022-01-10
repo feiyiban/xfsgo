@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -363,16 +364,36 @@ func encodePacket(privateKey *ecdsa.PrivateKey, ptype byte, req interface{}) ([]
 	}
 	datahash := ahash.SHA256(bs)
 	signed, err := crypto.ECDSASign(datahash, privateKey)
-	//_=signed
-	b.Write(signed)
-	bsLen := uint32(len(bs))
-	if (bsLen >> 8) > 0 {
-		return nil, fmt.Errorf("out")
+	if err != nil {
+		return nil, err
 	}
+
+	b.Write(signed)
+	// bsLen := uint32(len(bs))
+	// if (bsLen >> 8) > 0 {
+	// 	return nil, fmt.Errorf("out")
+	// }
 	b.WriteByte(byte(uint32(len(bs))))
 	b.Write(bs)
 	return b.Bytes(), nil
 }
+
+func IntToBytes(n int) []byte {
+	x := int32(n)
+	bytesBuffer := bytes.NewBuffer([]byte{})
+	_ = binary.Write(bytesBuffer, binary.BigEndian, x)
+	return bytesBuffer.Bytes()
+}
+
+func BytesToInt(b []byte) int {
+	bytesBuffer := bytes.NewBuffer(b)
+
+	var x int32
+	_ = binary.Read(bytesBuffer, binary.BigEndian, &x)
+
+	return int(x)
+}
+
 func encodePacketN(privateKey *ecdsa.PrivateKey, ptype byte, req interface{}, remote NodeId) ([]byte, error) {
 	b := new(bytes.Buffer)
 	b.WriteByte(ptype)
@@ -384,13 +405,16 @@ func encodePacketN(privateKey *ecdsa.PrivateKey, ptype byte, req interface{}, re
 	}
 	datahash := ahash.SHA256(bs)
 	signed, err := crypto.ECDSASign(datahash, privateKey)
+	if err != nil {
+		return nil, err
+	}
 	b.Write(signed)
 	b.Write(remote[:])
 	dataLen := len(bs)
-	if (dataLen >> 8) > 0 {
-		return nil, fmt.Errorf("out")
-	}
-	b.WriteByte(byte(dataLen))
+	// if (dataLen >> 8) > 0 {
+	// 	return nil, fmt.Errorf("out")
+	// }
+	b.Write(IntToBytes(dataLen))
 	b.Write(bs)
 	return b.Bytes(), nil
 }
@@ -451,7 +475,7 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 type packetHeadN struct {
 	mType   uint8
 	sign    [65]byte
-	dataLen uint8
+	dataLen uint32
 	remote  NodeId
 }
 type packetHead struct {
@@ -484,8 +508,8 @@ func decodePacketHead(reader io.Reader) (*packetHead, int, error) {
 	return ph, last, nil
 }
 
-// headerLen = type(1) + sign(65) + remote(64) + len(1)
-const headerLen1 = 131
+// headerLen = type(1) + sign(65) + remote(64) + len(4)
+const headerLen1 = 134
 
 func decodePacketHeadN(reader io.Reader) (*packetHeadN, int, error) {
 	// 0000
@@ -501,11 +525,11 @@ func decodePacketHeadN(reader io.Reader) (*packetHeadN, int, error) {
 		last += n
 	}
 	ph := new(packetHeadN)
-	mType, sign, remote, dataLen := hbytes[0], hbytes[1:66], hbytes[66:130], hbytes[130]
+	mType, sign, remote, dataLen := hbytes[0], hbytes[1:66], hbytes[66:130], hbytes[130:134]
 	ph.mType = mType
 	copy(ph.sign[:], sign[:])
 	copy(ph.remote[:], remote)
-	ph.dataLen = dataLen
+	ph.dataLen = uint32(BytesToInt(dataLen))
 	return ph, last, nil
 }
 
@@ -525,7 +549,7 @@ func decodePacketN(reader io.Reader, self NodeId) (packet, NodeId, error) {
 		return nil, NodeId{}, fmt.Errorf("id not match")
 	}
 	var data = make([]byte, h.dataLen)
-	last := uint8(0)
+	last := uint32(0)
 	for last < h.dataLen {
 		var buf = make([]byte, h.dataLen)
 		n, err := reader.Read(buf[:])
@@ -533,7 +557,7 @@ func decodePacketN(reader io.Reader, self NodeId) (packet, NodeId, error) {
 			return nil, NodeId{}, err
 		}
 		copy(data[last:int(last)+n], buf[:n])
-		last += uint8(n)
+		last += uint32(n)
 	}
 	datahash := ahash.SHA256(data)
 	nid, err := recoverNodeId(datahash, h.sign[:])

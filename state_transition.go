@@ -24,7 +24,7 @@ import (
 	"xfsgo/common"
 	"xfsgo/crypto"
 	"xfsgo/params"
-	"xfsgo/vm"
+	"xfsgo/vm/evm"
 
 	"github.com/sirupsen/logrus"
 )
@@ -58,8 +58,8 @@ type StateTransition struct {
 	initialGas uint64
 	value      *big.Int
 	data       []byte
-	state      vm.StateDB
-	evm        *vm.EVM
+	state      evm.StateDB
+	evm        *evm.EVM
 }
 
 // Message represents a message sent to a contract.
@@ -103,7 +103,7 @@ func (result *ExecutionResult) Return() []byte {
 // Revert returns the concrete revert reason if the execution is aborted by `REVERT`
 // opcode. Note the reason can be nil if no data supplied with revert opcode.
 func (result *ExecutionResult) Revert() []byte {
-	if result.Err != vm.ErrExecutionReverted {
+	if result.Err != evm.ErrExecutionReverted {
 		return nil
 	}
 	return common.CopyBytes(result.ReturnData)
@@ -145,7 +145,7 @@ func IntrinsicGas(data []byte, isContractCreation bool) (uint64, error) {
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *evm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:       gp,
 		evm:      evm,
@@ -164,7 +164,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
+func ApplyMessage(evm *evm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
@@ -258,7 +258,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 	msg := st.msg
-	sender := vm.AccountRef(msg.From())
+	sender := evm.AccountRef(msg.From())
 	contractCreation := msg.To() == common.Address{}
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
@@ -312,18 +312,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(bc ChainContext, author *common.Address, gp *GasPool, statedb *StateTree, header *BlockHeader, tx *Transaction, usedGas *uint64, cfg vm.Config) (*Receipt, error) {
+func ApplyTransaction(bc ChainContext, author *common.Address, gp *GasPool, statedb *StateTree, header *BlockHeader, tx *Transaction, usedGas *uint64, cfg evm.Config) (*Receipt, error) {
 	msg, err := tx.AsMessage()
 	if err != nil {
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cfg)
+	vmenv := evm.NewEVM(blockContext, evm.TxContext{}, statedb, cfg)
 	return applyTransaction(msg, bc, author, gp, statedb, new(big.Int).SetUint64(header.Height), header.HeaderHash(), tx, usedGas, vmenv)
 }
 
-func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, gp *GasPool, statedb *StateTree, blockNumber *big.Int, blockHash common.Hash, tx *Transaction, usedGas *uint64, evm *vm.EVM) (*Receipt, error) {
+func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, gp *GasPool, statedb *StateTree, blockNumber *big.Int, blockHash common.Hash, tx *Transaction, usedGas *uint64, evm *evm.EVM) (*Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -336,7 +336,7 @@ func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, g
 
 	receipt := &Receipt{}
 	if (msg.To() == common.Address{}) {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce)
+		receipt.ContractAddress = crypto.CreateAdrAddress(evm.TxContext.Origin, tx.Nonce)
 	}
 
 	*usedGas += result.UsedGas

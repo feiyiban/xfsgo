@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
@@ -141,6 +142,14 @@ func ByteHash256(raw []byte) common.Hash {
 	return common.Bytes2Hash(h)
 }
 
+func CreateAddress(addrHash common.Hash, nonce uint64) common.Address {
+	var nonceBytes [8]byte
+	binary.LittleEndian.PutUint64(nonceBytes[:], nonce)
+	mix := append(addrHash[:], nonceBytes[:]...)
+	h := ahash.SHA256(mix)
+	return common.Bytes2Address(h)
+}
+
 // KeccakState wraps sha3.state. In addition to the usual hash methods, it also supports
 // Read to get a variable amount of data from the hash state. Read is faster than Sum
 // because it doesn't copy the internal state, but also modifies the internal state.
@@ -198,7 +207,7 @@ func CreateAddress2(b common.Address, salt [32]byte, inithash []byte) common.Add
 }
 
 // CreateAddress creates an ethereum address given the bytes and the nonce
-func CreateAddress(b common.Address, nonce uint64) common.Address {
+func CreateAdrAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.Bytes2Address(Keccak256(data)[12:])
 }
