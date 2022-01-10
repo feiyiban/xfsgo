@@ -252,6 +252,7 @@ func (handler *ChainAPIHandler) GetReceiptByHash(args GetReceiptByHashArgs, resp
 		BlockHash:       dataReceiptIndex.BlockHash,
 		BlockIndex:      dataReceiptIndex.BlockIndex,
 		TxIndex:         dataReceiptIndex.Index,
+		Result:          dataReceipt.Result,
 	}
 
 	return coverReceipt(data, resp)

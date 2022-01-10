@@ -110,6 +110,7 @@ type ReceiptResp struct {
 	BlockHash       common.Hash    `json:"block_hash"`
 	BlockIndex      uint64         `json:"block_index"`
 	TxIndex         uint64         `json:"tx_index"`
+	Result          string         `json:"result"`
 }
 
 type ChainStatusResp struct {

@@ -345,6 +345,7 @@ func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, g
 	receipt.TxHash = tx.Hash()
 	receipt.Status = 1
 	receipt.GasUsed = new(big.Int).SetUint64(*usedGas)
+	receipt.Result = common.Bytes2Hex(result.ReturnData[:])
 
 	return receipt, err
 }
