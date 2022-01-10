@@ -336,7 +336,7 @@ func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, g
 
 	receipt := &Receipt{}
 	if (msg.To() == common.Address{}) {
-		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce)
+		receipt.ContractAddress = crypto.CreateAdrAddress(evm.TxContext.Origin, tx.Nonce)
 	}
 
 	*usedGas += result.UsedGas

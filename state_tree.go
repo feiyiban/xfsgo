@@ -41,6 +41,7 @@ type StateObj struct {
 	address      common.Address //hash of address of the account
 	balance      *big.Int
 	nonce        uint64
+	extra        []byte
 	code         []byte
 	stateRoot    common.Hash
 	cacheStorage map[[32]byte][]byte
@@ -245,6 +246,10 @@ func (s *StateObj) Code(treeDB badger.IStorage) []byte {
 	// 	s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
 	// }
 	// s.code = code
+}
+
+func (so *StateObj) GetStateRoot() common.Hash {
+	return so.stateRoot
 }
 
 type StateTree struct {
@@ -536,6 +541,14 @@ func (db *StateTree) ForEachStorage(addr common.Address, cb func(key, value comm
 	// 	}
 	// }
 	return nil
+}
+
+func (so *StateObj) GetExtra() []byte {
+	return so.extra
+}
+
+func (so *StateObj) GetCode() []byte {
+	return so.code
 }
 
 func (s *StateTree) GetCode(addr common.Address) []byte {

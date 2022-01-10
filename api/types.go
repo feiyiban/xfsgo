@@ -17,6 +17,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math/big"
 	"xfsgo"
@@ -26,9 +27,11 @@ import (
 type EmptyArgs = interface{}
 
 type StateObjResp struct {
-	Balance  *big.Int `json:"balance"`
-	Nonce    uint64   `json:"nonce"`
-	ExtraHex string   `json:"extraHex"`
+	Balance   *string      `json:"balance"`
+	Nonce     uint64       `json:"nonce"`
+	Extra     *string      `json:"extra"`
+	Code      *string      `json:"code"`
+	StateRoot *common.Hash `json:"state_root"`
 }
 
 type BlockHeaderResp struct {
@@ -246,11 +249,29 @@ func coverState2Resp(state *xfsgo.StateObj, dst **StateObjResp) error {
 		return nil
 	}
 	result := new(StateObjResp)
-	statehex := hex.EncodeToString(state.GetData())
-	if statehex != "" {
-		result.ExtraHex = "0x" + statehex
+	extra := state.GetExtra()
+	if extra != nil {
+		statehex := hex.EncodeToString(state.GetExtra())
+		if statehex != "" {
+			statehex = "0x" + statehex
+			result.Extra = &statehex
+		}
 	}
-	result.Balance = state.GetBalance()
+	code := state.GetCode()
+	if code != nil {
+		codehex := hex.EncodeToString(state.GetExtra())
+		if codehex != "" {
+			codehex = "0x" + codehex
+			result.Code = &codehex
+		}
+	}
+	stateRoot := state.GetStateRoot()
+	if !bytes.Equal(stateRoot[:], common.HashZ[:]) {
+		result.StateRoot = &stateRoot
+	}
+	balance := state.GetBalance()
+	balanceText := balance.Text(10)
+	result.Balance = &balanceText
 	result.Nonce = state.GetNonce()
 	*dst = result
 	return nil

@@ -63,7 +63,6 @@ var (
 		RunE:                  ClearTxPool,
 	}
 	removeTxCommand = &cobra.Command{
-
 		Use:                   "removetx [options] <transaction_hash>",
 		DisableFlagsInUseLine: true,
 		Short:                 "deletes the specified transaction hash in the local transaction pool",

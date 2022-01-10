@@ -64,7 +64,7 @@ func (state *StateAPIHandler) GetBalance(args GetBalanceArgs, resp *string) erro
 
 	data := stateTree.GetStateObj(address)
 
-	if data == (&xfsgo.StateObj{}) || data == nil {
+	if data == (&xfsgo.StateObj{}) || data == nil || data.GetBalance() == nil {
 		*resp = "0"
 		return nil
 	}
