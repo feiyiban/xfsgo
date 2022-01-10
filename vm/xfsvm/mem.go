@@ -1,4 +1,4 @@
-package vm
+package xfsvm
 
 type mem struct {
 	data []byte

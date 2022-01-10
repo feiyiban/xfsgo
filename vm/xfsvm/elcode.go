@@ -1,4 +1,4 @@
-package vm
+package xfsvm
 
 type elheader struct {
 	magic uint32
