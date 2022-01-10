@@ -30,6 +30,7 @@ type Receipt struct {
 	Status          uint32         `json:"status"`
 	TxHash          common.Hash    `json:"tx_hash"`
 	GasUsed         *big.Int       `json:"gas_used"`
+	Result          string         `json:"result"`
 }
 
 func NewReceipt(txHash common.Hash) *Receipt {
