@@ -26,7 +26,7 @@ import (
 	"xfsgo/common"
 	"xfsgo/params"
 	"xfsgo/storage/badger"
-	"xfsgo/vm"
+	"xfsgo/vm/evm"
 
 	"github.com/sirupsen/logrus"
 )
@@ -110,7 +110,7 @@ type IBlockChain interface {
 	CalcNextRequiredBitsByHeight(height uint64) (uint32, error)
 	CurrentStateTree() *StateTree
 	GetHeader(hash common.Hash, number uint64) *BlockHeader
-	GetVMConfig() *vm.Config
+	GetVMConfig() *evm.Config
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -139,7 +139,7 @@ type BlockChain struct {
 	syncStatsHeight uint64       // Highest block number known when syncing started
 	syncStatsLock   sync.RWMutex // Lock protecting the sync stats fields
 
-	vmConfig vm.Config
+	vmConfig evm.Config
 }
 
 func NewBlockChainN(stateDB, chainDB, extraDB badger.IStorage, eventBus *EventBus, debug bool) (*BlockChain, error) {
@@ -299,11 +299,11 @@ func (bc *BlockChain) setLastState() error {
 	return nil
 }
 
-func (bc *BlockChain) GetEVM(msg Message, statedb *StateTree, header *BlockHeader) (*vm.EVM, error) {
+func (bc *BlockChain) GetEVM(msg Message, statedb *StateTree, header *BlockHeader) (*evm.EVM, error) {
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
 	blockContext := NewEVMBlockContext(header, bc, nil)
-	return vm.NewEVM(blockContext, txContext, statedb, bc.vmConfig), nil
+	return evm.NewEVM(blockContext, txContext, statedb, bc.vmConfig), nil
 }
 
 // GetBlockReceiptsByBHash get Receipts by blockheader hash
@@ -824,7 +824,7 @@ func (bc *BlockChain) processOrphans(hash common.Hash) error {
 }
 
 // GetVMConfig returns the block chain VM config.
-func (bc *BlockChain) GetVMConfig() *vm.Config {
+func (bc *BlockChain) GetVMConfig() *evm.Config {
 	return &bc.vmConfig
 }
 

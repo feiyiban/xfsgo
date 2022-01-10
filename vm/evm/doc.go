@@ -14,29 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package runtime
+/*
+Package vm implements the Ethereum Virtual Machine.
 
-import (
-	"xfsgo"
-	"xfsgo/vm/evm"
-)
-
-func NewEnv(cfg *Config) *evm.EVM {
-	txContext := evm.TxContext{
-		Origin:   cfg.Origin,
-		GasPrice: cfg.GasPrice,
-	}
-	blockContext := evm.BlockContext{
-		CanTransfer: xfsgo.CanTransfer,
-		Transfer:    xfsgo.Transfer,
-		GetHash:     cfg.GetHashFn,
-		Coinbase:    cfg.Coinbase,
-		BlockNumber: cfg.BlockNumber,
-		Time:        cfg.Time,
-		Difficulty:  cfg.Difficulty,
-		GasLimit:    cfg.GasLimit,
-		BaseFee:     cfg.BaseFee,
-	}
-
-	return evm.NewEVM(blockContext, txContext, cfg.State, cfg.EVMConfig)
-}
+The vm package implements one EVM, a byte code VM. The BC (Byte Code) VM loops
+over a set of bytes and executes them according to the set of rules defined
+in the Ethereum yellow paper.
+*/
+package evm
