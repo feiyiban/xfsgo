@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"xfsgo"
 	"xfsgo/common"
+	"xfsgo/state"
 )
 
 type EmptyArgs = interface{}
@@ -244,7 +245,7 @@ func coverReceipt(src *ReceiptResp, dst **ReceiptResp) error {
 	return common.Objcopy(src, &dst)
 }
 
-func coverState2Resp(state *xfsgo.StateObj, dst **StateObjResp) error {
+func coverState2Resp(state *state.StateObject, dst **StateObjResp) error {
 	if state == nil {
 		return nil
 	}

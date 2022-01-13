@@ -24,6 +24,7 @@ import (
 	"xfsgo/common"
 	"xfsgo/crypto"
 	"xfsgo/params"
+	"xfsgo/state"
 	"xfsgo/vm/evm"
 
 	"github.com/sirupsen/logrus"
@@ -312,7 +313,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(bc ChainContext, author *common.Address, gp *GasPool, statedb *StateTree, header *BlockHeader, tx *Transaction, usedGas *uint64, cfg evm.Config) (*Receipt, error) {
+func ApplyTransaction(bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *BlockHeader, tx *Transaction, usedGas *uint64, cfg evm.Config) (*Receipt, error) {
 	msg, err := tx.AsMessage()
 	if err != nil {
 		return nil, err
@@ -323,7 +324,7 @@ func ApplyTransaction(bc ChainContext, author *common.Address, gp *GasPool, stat
 	return applyTransaction(msg, bc, author, gp, statedb, new(big.Int).SetUint64(header.Height), header.HeaderHash(), tx, usedGas, vmenv)
 }
 
-func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, gp *GasPool, statedb *StateTree, blockNumber *big.Int, blockHash common.Hash, tx *Transaction, usedGas *uint64, evm *evm.EVM) (*Receipt, error) {
+func applyTransaction(msg MessageImp, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *Transaction, usedGas *uint64, evm *evm.EVM) (*Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)

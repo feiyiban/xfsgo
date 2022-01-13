@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"strings"
 	"xfsgo/common"
+	"xfsgo/state"
 	"xfsgo/storage/badger"
 
 	"github.com/sirupsen/logrus"
@@ -62,7 +63,7 @@ func WriteGenesisBlockN(stateDB, chainDB badger.IStorage, reader io.Reader, debu
 		return nil, err
 	}
 	chaindb := newChainDBN(chainDB, debug)
-	stateTree := NewStateTree(stateDB, nil)
+	stateTree := state.NewStateTree(stateDB, nil)
 	//logrus.Debugf("initialize genesis account count: %d", len(genesis.Accounts))
 	for addr, a := range genesis.Accounts {
 		address := common.B58ToAddress([]byte(addr))

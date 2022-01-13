@@ -14,7 +14,7 @@
 // You should have received a copy of the MIT Lesser General Public License
 // along with the xfsgo library. If not, see <https://mit-license.org/>.
 
-package xfsgo
+package state
 
 import (
 	"sync"
@@ -22,29 +22,29 @@ import (
 )
 
 type account struct {
-	stateObject *StateObj
+	stateObject *StateObject
 	nstart      uint64
 	nonces      []bool
 }
 
 type ManagedState struct {
-	*StateTree
+	*StateDB
 	mu       sync.RWMutex
 	accounts map[common.Address]*account
 }
 
-func NewManageState(tree *StateTree) *ManagedState {
+func NewManageState(tree *StateDB) *ManagedState {
 
 	return &ManagedState{
-		StateTree: tree.Copy(),
-		accounts:  make(map[common.Address]*account),
+		StateDB:  tree.Copy(),
+		accounts: make(map[common.Address]*account),
 	}
 }
 
-func (ms *ManagedState) SetState(stateTree *StateTree) {
+func (ms *ManagedState) SetState(stateTree *StateDB) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	ms.StateTree = stateTree
+	ms.StateDB = stateTree
 }
 func (ms *ManagedState) hasAccount(addr common.Address) bool {
 	_, ok := ms.accounts[addr]
@@ -93,7 +93,7 @@ func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
 		account := ms.getAccount(addr)
 		return uint64(len(account.nonces)) + account.nstart
 	} else {
-		return ms.StateTree.GetNonce(addr)
+		return ms.StateDB.GetNonce(addr)
 	}
 }
 
@@ -104,7 +104,7 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 	} else {
 		// Always make sure the state account nonce isn't actually higher
 		// than the tracked one.
-		so := ms.StateTree.GetStateObj(addr)
+		so := ms.StateDB.GetStateObj(addr)
 		if so != nil && uint64(len(account.nonces))+account.nstart < so.nonce {
 			ms.accounts[addr] = newAccount(so)
 		}
@@ -123,6 +123,6 @@ func (ms *ManagedState) SetNonce(addr common.Address, nonce uint64) {
 	ms.accounts[addr] = newAccount(so)
 }
 
-func newAccount(so *StateObj) *account {
+func newAccount(so *StateObject) *account {
 	return &account{so, so.nonce, nil}
 }

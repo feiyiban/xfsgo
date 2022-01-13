@@ -14,6 +14,7 @@ import (
 	"xfsgo/crypto"
 	"xfsgo/p2p"
 	"xfsgo/p2p/discover"
+	"xfsgo/state"
 	"xfsgo/test"
 )
 
@@ -134,9 +135,9 @@ func (o *msgOnceSendTester) GetProtocolMsgCh() (chan p2p.MessageReader, error) {
 }
 
 func newTestTxPool(chain chainMgr, gasLimit, gasPrice *big.Int) *xfsgo.TxPool {
-	statefn := func() *xfsgo.StateTree {
+	statefn := func() *state.StateDB {
 		chainhead := chain.CurrentBHeader()
-		return xfsgo.NewStateTree(testMemStorage, chainhead.StateRoot.Bytes())
+		return state.NewStateTree(testMemStorage, chainhead.StateRoot.Bytes())
 	}
 	gasLimitFn := func() *big.Int {
 		return gasLimit

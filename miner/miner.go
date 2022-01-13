@@ -27,6 +27,7 @@ import (
 	"time"
 	"xfsgo"
 	"xfsgo/common"
+	"xfsgo/state"
 	"xfsgo/storage/badger"
 
 	"github.com/sirupsen/logrus"
@@ -284,7 +285,7 @@ func (m *Miner) TargetHashRate() common.HashRate {
 }
 
 func (m *Miner) applyTransactions(
-	stateTree *xfsgo.StateTree,
+	stateTree *state.StateDB,
 	header *xfsgo.BlockHeader,
 	txs []*xfsgo.Transaction,
 	ignoreTxs map[common.Address]struct{},
@@ -325,7 +326,7 @@ func (m *Miner) applyTransactions(
 }
 
 func (m *Miner) mimeBlockWithParent(
-	stateTree *xfsgo.StateTree,
+	stateTree *state.StateDB,
 	parentBlock *xfsgo.BlockHeader,
 	coinbase common.Address,
 	txs []*xfsgo.Transaction,
@@ -453,7 +454,7 @@ out:
 		lastStateRoot := lastBlock.StateRoot
 		//lastBlockHash := lastBlock.Hash()
 		//logrus.Debugf("Generating block by parent height=%d, hash=0x%x...%x, workerId=%-3d", lastBlock.Height(), lastBlockHash[:4], lastBlockHash[len(lastBlockHash)-4:], num)
-		stateTree := xfsgo.NewStateTree(m.stateDb, lastStateRoot.Bytes())
+		stateTree := state.NewStateTree(m.stateDb, lastStateRoot.Bytes())
 		startTime := time.Now()
 		block, err := m.mimeBlockWithParent(stateTree, lastBlock, m.Coinbase, txs, quit, ticker, report)
 		if err != nil {
