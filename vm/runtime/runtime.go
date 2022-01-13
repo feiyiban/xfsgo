@@ -20,10 +20,9 @@ import (
 	"math"
 	"math/big"
 	"time"
-	"xfsgo"
-
 	"xfsgo/crypto"
 	"xfsgo/params"
+	"xfsgo/state"
 	"xfsgo/test"
 	"xfsgo/vm/evm"
 
@@ -46,7 +45,7 @@ type Config struct {
 	EVMConfig   evm.Config
 	BaseFee     *big.Int
 
-	State     *xfsgo.StateTree
+	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
 }
 
@@ -105,7 +104,7 @@ func setDefaults(cfg *Config) {
 //
 // Execute sets up an in-memory, temporary, environment for the execution of
 // the given code. It makes sure that it's restored to its original state afterwards.
-func Execute(code, input []byte, cfg *Config) ([]byte, *xfsgo.StateTree, error) {
+func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -113,7 +112,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *xfsgo.StateTree, error) 
 
 	if cfg.State == nil {
 		// cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		cfg.State = xfsgo.NewStateTree(test.NewMemStorage(), nil)
+		cfg.State = state.NewStateTree(test.NewMemStorage(), nil)
 	}
 	var (
 		address = common.Bytes2Address([]byte("contract"))

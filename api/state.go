@@ -19,6 +19,7 @@ package api
 import (
 	"xfsgo"
 	"xfsgo/common"
+	"xfsgo/state"
 	"xfsgo/storage/badger"
 )
 
@@ -37,10 +38,10 @@ type GetBalanceArgs struct {
 	Address  string `json:"address"`
 }
 
-func (state *StateAPIHandler) GetBalance(args GetBalanceArgs, resp *string) error {
+func (stateAPI *StateAPIHandler) GetBalance(args GetBalanceArgs, resp *string) error {
 	var rootHash common.Hash
 	if args.RootHash == "" {
-		rootHash = state.BlockChain.CurrentBHeader().StateRoot
+		rootHash = stateAPI.BlockChain.CurrentBHeader().StateRoot
 	} else {
 		if err := common.HashCalibrator(args.RootHash); err != nil {
 			return xfsgo.NewRPCErrorCause(-32001, err)
@@ -58,13 +59,13 @@ func (state *StateAPIHandler) GetBalance(args GetBalanceArgs, resp *string) erro
 
 	rootHashByte := rootHash.Bytes()
 
-	stateTree := xfsgo.NewStateTree(state.StateDb, rootHashByte)
+	stateTree := state.NewStateTree(stateAPI.StateDb, rootHashByte)
 
 	address := common.B58ToAddress([]byte(args.Address))
 
 	data := stateTree.GetStateObj(address)
 
-	if data == (&xfsgo.StateObj{}) || data == nil || data.GetBalance() == nil {
+	if data == (&state.StateObject{}) || data == nil || data.GetBalance() == nil {
 		*resp = "0"
 		return nil
 	}
@@ -73,10 +74,10 @@ func (state *StateAPIHandler) GetBalance(args GetBalanceArgs, resp *string) erro
 
 }
 
-func (state *StateAPIHandler) GetAccount(args GetAccountArgs, resp **StateObjResp) error {
+func (stateAPI *StateAPIHandler) GetAccount(args GetAccountArgs, resp **StateObjResp) error {
 	var statehash []byte
 	if args.RootHash == "" {
-		rootHash := state.BlockChain.CurrentBHeader().StateRoot
+		rootHash := stateAPI.BlockChain.CurrentBHeader().StateRoot
 		statehash = rootHash[:]
 	} else {
 		if err := common.HashCalibrator(args.RootHash); err != nil {
@@ -92,7 +93,7 @@ func (state *StateAPIHandler) GetAccount(args GetAccountArgs, resp **StateObjRes
 		return xfsgo.NewRPCErrorCause(-32001, err)
 	}
 
-	stateTree := xfsgo.NewStateTree(state.StateDb, statehash)
+	stateTree := state.NewStateTree(stateAPI.StateDb, statehash)
 
 	address := common.B58ToAddress([]byte(args.Address))
 

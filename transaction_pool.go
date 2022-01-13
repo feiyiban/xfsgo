@@ -19,11 +19,12 @@ package xfsgo
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"math/big"
 	"sort"
 	"sync"
 	"xfsgo/common"
+	"xfsgo/state"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -40,7 +41,7 @@ var (
 	gasLimitErr      = errors.New("gas limit too low")
 )
 
-type stateFn func() *StateTree
+type stateFn func() *state.StateDB
 type gasLimitFn func() *big.Int
 
 // TxPool contains all currently known transactions. Transactions
@@ -53,7 +54,7 @@ type gasLimitFn func() *big.Int
 type TxPool struct {
 	quit         chan bool
 	currentState stateFn // The state function which will allow us to do some pre checkes
-	pendingState *ManagedState
+	pendingState *state.ManagedState
 	eventBus     *EventBus
 	mu           sync.RWMutex
 	gasLimitFn   gasLimitFn // The current gas limit function callback
@@ -72,7 +73,7 @@ func NewTxPool(currentStateFn stateFn, gasLimitFn gasLimitFn, gasPrice *big.Int,
 		gasLimitFn:   gasLimitFn,
 		minGasPrice:  gasPrice,
 		currentState: currentStateFn,
-		pendingState: NewManageState(currentStateFn()),
+		pendingState: state.NewManageState(currentStateFn()),
 	}
 	pool.eventBus = eventBus
 	go pool.eventLoop()
@@ -232,7 +233,7 @@ func (pool *TxPool) addTx(hash common.Hash, addr common.Address, tx *Transaction
 
 func (pool *TxPool) resetState() {
 	// reset state manager of peeding transactions
-	pool.pendingState = NewManageState(pool.currentState())
+	pool.pendingState = state.NewManageState(pool.currentState())
 
 	// check tx pool and update peeding queue
 	pool.validatePool()
@@ -335,7 +336,7 @@ func (pool *TxPool) GetTransaction(tranHash string) *Transaction {
 	return nil
 }
 
-func (pool *TxPool) State() *ManagedState {
+func (pool *TxPool) State() *state.ManagedState {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 	return pool.pendingState

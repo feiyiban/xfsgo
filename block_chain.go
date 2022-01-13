@@ -25,13 +25,12 @@ import (
 	"time"
 	"xfsgo/common"
 	"xfsgo/params"
+	"xfsgo/state"
 	"xfsgo/storage/badger"
 	"xfsgo/vm/evm"
 
 	"github.com/sirupsen/logrus"
 )
-
-var zeroBigN = new(big.Int).SetInt64(0)
 
 const (
 	// blocks can be created per second(in seconds)
@@ -115,7 +114,7 @@ type IBlockChain interface {
 	FindAncestor(bHeader *BlockHeader, height uint64) *BlockHeader
 	CalcNextRequiredDifficulty() (uint32, error)
 	CalcNextRequiredBitsByHeight(height uint64) (uint32, error)
-	CurrentStateTree() *StateTree
+	CurrentStateTree() *state.StateDB
 	GetHeader(hash common.Hash, number uint64) *BlockHeader
 	GetVMConfig() *evm.Config
 }
@@ -132,7 +131,7 @@ type BlockChain struct {
 	genesisBHeader *BlockHeader
 	currentBHeader *BlockHeader
 	lastBlockHash  common.Hash
-	stateTree      *StateTree
+	stateTree      *state.StateDB
 	mu             sync.RWMutex
 	chainmu        sync.RWMutex
 	eventBus       *EventBus
@@ -170,7 +169,7 @@ func NewBlockChainN(stateDB, chainDB, extraDB badger.IStorage, eventBus *EventBu
 		return nil, err
 	}
 	stateRootHash := bc.currentBHeader.StateRoot
-	bc.stateTree = NewStateTree(stateDB, stateRootHash.Bytes())
+	bc.stateTree = state.NewStateTree(stateDB, stateRootHash.Bytes())
 	return bc, nil
 }
 
@@ -180,8 +179,8 @@ func (bc *BlockChain) GetNonce(addr common.Address) uint64 {
 	return bc.stateTree.GetNonce(addr)
 }
 
-func (bc *BlockChain) StateAt(rootHash common.Hash) *StateTree {
-	return NewStateTree(bc.stateDB, rootHash.Bytes())
+func (bc *BlockChain) StateAt(rootHash common.Hash) *state.StateDB {
+	return state.NewStateTree(bc.stateDB, rootHash.Bytes())
 }
 
 // getBlockByNumber get Block's Info about the Optimum chain
@@ -306,7 +305,7 @@ func (bc *BlockChain) setLastState() error {
 	return nil
 }
 
-func (bc *BlockChain) GetEVM(msg Message, statedb *StateTree, header *BlockHeader) (*evm.EVM, error) {
+func (bc *BlockChain) GetEVM(msg Message, statedb *state.StateDB, header *BlockHeader) (*evm.EVM, error) {
 	// Create a new context to be used in the EVM environment
 	txContext := NewEVMTxContext(msg)
 	blockContext := NewEVMBlockContext(header, bc, nil)
@@ -406,7 +405,7 @@ func (bc *BlockChain) insertBHeader2Chain(bHeader *BlockHeader) error {
 	bc.currentBHeader = bHeader
 	bc.lastBlockHash = bHeader.HeaderHash()
 	lastStateRoot := bHeader.StateRoot
-	bc.stateTree = NewStateTree(bc.stateDB, lastStateRoot.Bytes())
+	bc.stateTree = state.NewStateTree(bc.stateDB, lastStateRoot.Bytes())
 	return nil
 }
 
@@ -608,7 +607,7 @@ func calcBlockSubsidy(height uint64) *big.Int {
 }
 
 // AccumulateRewards calculates the rewards and add it to the miner's account.
-func AccumulateRewards(stateTree *StateTree, header *BlockHeader) {
+func AccumulateRewards(stateTree *state.StateDB, header *BlockHeader) {
 	subsidy := calcBlockSubsidy(header.Height)
 
 	//logrus.Debugf("Current height of the blockchain %d, reward: %d", header.Height, subsidy)
@@ -635,7 +634,7 @@ func (bc *BlockChain) maybeAcceptBlock(block *Block) error {
 	parentStateRoot := parent.StateRoot()
 	//logrus.Debugf("New state tree: parentHeight=%d, parentHash=%x, parentStateRoot=%x",
 	//	parent.Height(), parenthash[len(blockHash)-4:], parentStateRoot[len(parentStateRoot)-4:])
-	stateTree, err := NewStateTreeN(bc.stateDB, parentStateRoot.Bytes())
+	stateTree, err := state.NewStateTreeN(bc.stateDB, parentStateRoot.Bytes())
 	if err != nil {
 		logrus.Errorf("Accept block err: %v", err)
 		return ErrBadBlock
@@ -842,7 +841,7 @@ func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *BlockHeader {
 	return bc.chainDB.GetBlocksByHashAndHeight(hash, number)
 }
 
-func (bc *BlockChain) ApplyTransactions(stateTree *StateTree, header *BlockHeader, txs []*Transaction) (*big.Int, []*Receipt, error) {
+func (bc *BlockChain) ApplyTransactions(stateTree *state.StateDB, header *BlockHeader, txs []*Transaction) (*big.Int, []*Receipt, error) {
 	receipts := make([]*Receipt, 0)
 	var totalUsedGas uint64 = 0
 	mGasPool := (*GasPool)(new(big.Int).Set(header.GasLimit))
@@ -917,7 +916,7 @@ func (bc *BlockChain) IntrinsicGas(data []byte) *big.Int {
 	return common.CalcTxInitialCost(data)
 }
 
-func buyGas(sender *StateObj, tx *Transaction, gp *GasPool, gas *big.Int) error {
+func buyGas(sender *state.StateObject, tx *Transaction, gp *GasPool, gas *big.Int) error {
 	mgval := new(big.Int).Mul(tx.GasPrice, tx.GasLimit)
 	if sender.GetBalance().Cmp(mgval) < 0 {
 		return fmt.Errorf("per-buy gas err, balance is not enough")
@@ -1100,7 +1099,7 @@ func (bc *BlockChain) CalcNextRequiredBitsByHeight(height uint64) (uint32, error
 	return bc.calcNextRequiredBitsByHeight(height)
 }
 
-func (bc *BlockChain) CurrentStateTree() *StateTree {
+func (bc *BlockChain) CurrentStateTree() *state.StateDB {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
 	return bc.stateTree
