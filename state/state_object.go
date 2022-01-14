@@ -18,7 +18,7 @@ var zeroBigN = new(big.Int).SetInt64(0)
 // First, you need to obtain a StateObj object.
 // Second, access and modify the balance of account through the object.
 // Finally, call Commit method to write the modified merkleTree into a database.
-type StateObject struct {
+type stateObject struct {
 	merkleTree   *avlmerkle.Tree
 	address      common.Address //hash of address of the account
 	balance      *big.Int
@@ -40,7 +40,7 @@ func loadBytesByMapKey(m map[string]string, key string) (data []byte, rt bool) {
 	}
 	return
 }
-func (so *StateObject) Decode(data []byte) error {
+func (so *stateObject) Decode(data []byte) error {
 	r := common.StringDecodeMap(string(data))
 	if r == nil {
 		return nil
@@ -72,7 +72,7 @@ func (so *StateObject) Decode(data []byte) error {
 	return nil
 }
 
-func (so *StateObject) Encode() ([]byte, error) {
+func (so *stateObject) Encode() ([]byte, error) {
 	objmap := map[string]string{
 		"address": so.address.String(),
 		"balance": so.balance.Text(10),
@@ -89,18 +89,8 @@ func (so *StateObject) Encode() ([]byte, error) {
 	return []byte(enc), nil
 }
 
-// NewStateObj creates an StateObj with accout address and tree
-//func NewStateObj(address common.Address, tree *avlmerkle.Tree) *StateObj {
-//	obj := &StateObj{
-//		address:      address,
-//		merkleTree:   tree,
-//		cacheStorage: make(map[[32]byte][]byte),
-//	}
-//	return obj
-//}
-
-func NewStateObj(address common.Address, tree *avlmerkle.Tree, db badger.IStorage) *StateObject {
-	obj := &StateObject{
+func NewStateObj(address common.Address, tree *avlmerkle.Tree, db badger.IStorage) *stateObject {
+	obj := &stateObject{
 		address:      address,
 		merkleTree:   tree,
 		db:           db,
@@ -111,7 +101,7 @@ func NewStateObj(address common.Address, tree *avlmerkle.Tree, db badger.IStorag
 
 // AddBalance adds amount to StateObj's balance.
 // It is used to add funds to the destination account of a transfer.
-func (so *StateObject) AddBalance(val *big.Int) {
+func (so *stateObject) AddBalance(val *big.Int) {
 	if val == nil || val.Sign() <= 0 {
 		return
 	}
@@ -125,7 +115,7 @@ func (so *StateObject) AddBalance(val *big.Int) {
 
 // SubBalance removes amount from StateObj's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (so *StateObject) SubBalance(val *big.Int) {
+func (so *stateObject) SubBalance(val *big.Int) {
 	if val == nil || val.Sign() <= 0 {
 		return
 	}
@@ -137,46 +127,46 @@ func (so *StateObject) SubBalance(val *big.Int) {
 	so.SetBalance(newBalance)
 }
 
-func (so *StateObject) SetBalance(val *big.Int) {
+func (so *stateObject) SetBalance(val *big.Int) {
 	if val == nil || val.Sign() < 0 {
 		return
 	}
 	so.balance = val
 }
 
-func (so *StateObject) GetBalance() *big.Int {
+func (so *stateObject) GetBalance() *big.Int {
 	return so.balance
 }
 
 // Returns the address of the contract/account
-func (s *StateObject) Address() common.Address {
+func (s *stateObject) Address() common.Address {
 	return s.address
 }
 
-func (so *StateObject) SetNonce(nonce uint64) {
+func (so *stateObject) SetNonce(nonce uint64) {
 	so.nonce = nonce
 }
-func (so *StateObject) AddNonce(nonce uint64) {
+func (so *stateObject) AddNonce(nonce uint64) {
 	so.nonce += nonce
 }
-func (so *StateObject) SubNonce(nonce uint64) {
+func (so *stateObject) SubNonce(nonce uint64) {
 	so.nonce -= nonce
 }
-func (so *StateObject) GetNonce() uint64 {
+func (so *stateObject) GetNonce() uint64 {
 	return so.nonce
 }
 
-func (so *StateObject) SetState(key [32]byte, value []byte) {
+func (so *stateObject) SetState(key [32]byte, value []byte) {
 	so.cacheStorage[key] = value
 }
-func (so *StateObject) makeStateKey(key [32]byte) []byte {
+func (so *stateObject) makeStateKey(key [32]byte) []byte {
 	return ahash.SHA256(append(so.address[:], key[:]...))
 }
-func (so *StateObject) getStateTree() *avlmerkle.Tree {
+func (so *stateObject) getStateTree() *avlmerkle.Tree {
 	return avlmerkle.NewTree(so.db, so.stateRoot[:])
 }
 
-func (so *StateObject) GetStateValue(key [32]byte) []byte {
+func (so *stateObject) GetStateValue(key [32]byte) []byte {
 	if val, exists := so.cacheStorage[key]; exists {
 		return val
 	}
@@ -186,21 +176,19 @@ func (so *StateObject) GetStateValue(key [32]byte) []byte {
 	return nil
 }
 
-func (so *StateObject) GetData() []byte {
+func (so *stateObject) GetExtra() []byte {
+	return so.extra
+}
+
+func (so *stateObject) GetCode() []byte {
 	return so.code
 }
 
-func (s *StateObject) SetCode(codeHash common.Hash, code []byte) {
-	// prevcode := s.Code(s.db.db)
-	// s.db.journal.append(codeChange{
-	// 	account:  &s.address,
-	// 	prevhash: s.CodeHash(),
-	// 	prevcode: prevcode,
-	// })
+func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 	s.setCode(codeHash, code)
 }
 
-func (so *StateObject) Update() {
+func (so *stateObject) Update() {
 	for k, v := range so.cacheStorage {
 		so.getStateTree().Put(so.makeStateKey(k), v)
 	}
@@ -212,24 +200,12 @@ func (so *StateObject) Update() {
 
 }
 
-func (s *StateObject) setCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	// s.data.CodeHash = codeHash[:]
 	// s.dirtyCode = true
 }
 
-// Code returns the contract code associated with this object, if any.
-func (s *StateObject) Code(treeDB badger.IStorage) []byte {
-
-	return s.code
-
-	// code, err := treeDB.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
-	// if err != nil {
-	// 	s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
-	// }
-	// s.code = code
-}
-
-func (so *StateObject) GetStateRoot() common.Hash {
+func (so *stateObject) GetStateRoot() common.Hash {
 	return so.stateRoot
 }

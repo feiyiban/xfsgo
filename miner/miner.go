@@ -454,9 +454,9 @@ out:
 		lastStateRoot := lastBlock.StateRoot
 		//lastBlockHash := lastBlock.Hash()
 		//logrus.Debugf("Generating block by parent height=%d, hash=0x%x...%x, workerId=%-3d", lastBlock.Height(), lastBlockHash[:4], lastBlockHash[len(lastBlockHash)-4:], num)
-		stateTree := state.NewStateTree(m.stateDb, lastStateRoot.Bytes())
+		stateDB := state.NewStateDB(m.stateDb, lastStateRoot.Bytes())
 		startTime := time.Now()
-		block, err := m.mimeBlockWithParent(stateTree, lastBlock, m.Coinbase, txs, quit, ticker, report)
+		block, err := m.mimeBlockWithParent(stateDB, lastBlock, m.Coinbase, txs, quit, ticker, report)
 		if err != nil {
 			switch err {
 			case applyTransactionsErr:
@@ -479,7 +479,7 @@ out:
 		hashrate := common.HashRate(rate)
 		logrus.Infof("Sussessfully sealed new block: height=%d, hash=0x%x, txcount=%d, used=%fs, rate=%s",
 			block.Height(), hash[len(hash)-4:], len(block.Transactions), timeused.Seconds(), hashrate)
-		if err = stateTree.Commit(); err != nil {
+		if err = stateDB.Commit(); err != nil {
 			logrus.Warnln("State tree commit err: ", err)
 			continue out
 		}

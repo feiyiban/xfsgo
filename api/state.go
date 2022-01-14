@@ -59,13 +59,13 @@ func (stateAPI *StateAPIHandler) GetBalance(args GetBalanceArgs, resp *string) e
 
 	rootHashByte := rootHash.Bytes()
 
-	stateTree := state.NewStateTree(stateAPI.StateDb, rootHashByte)
+	stateDB := state.NewStateDB(stateAPI.StateDb, rootHashByte)
 
 	address := common.B58ToAddress([]byte(args.Address))
 
-	data := stateTree.GetStateObj(address)
+	data := stateDB.GetStateObj(address)
 
-	if data == (&state.StateObject{}) || data == nil || data.GetBalance() == nil {
+	if data == nil || data.GetBalance() == nil {
 		*resp = "0"
 		return nil
 	}
@@ -93,10 +93,9 @@ func (stateAPI *StateAPIHandler) GetAccount(args GetAccountArgs, resp **StateObj
 		return xfsgo.NewRPCErrorCause(-32001, err)
 	}
 
-	stateTree := state.NewStateTree(stateAPI.StateDb, statehash)
+	stateDB := state.NewStateDB(stateAPI.StateDb, statehash)
 
 	address := common.B58ToAddress([]byte(args.Address))
 
-	data := stateTree.GetStateObj(address)
-	return coverState2Resp(data, resp)
+	return coverState2Resp(stateDB, address, resp)
 }

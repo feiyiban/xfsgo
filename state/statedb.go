@@ -15,14 +15,14 @@ type StateDB struct {
 	root       []byte
 	treeDB     badger.IStorage
 	merkleTree *avlmerkle.Tree
-	objs       map[common.Address]*StateObject
+	objs       map[common.Address]*stateObject
 }
 
-func NewStateTree(db badger.IStorage, root []byte) *StateDB {
+func NewStateDB(db badger.IStorage, root []byte) *StateDB {
 	st := &StateDB{
 		root:   root,
 		treeDB: db,
-		objs:   make(map[common.Address]*StateObject),
+		objs:   make(map[common.Address]*stateObject),
 	}
 	st.merkleTree = avlmerkle.NewTree(st.treeDB, root)
 	return st
@@ -32,7 +32,7 @@ func NewStateTreeN(db badger.IStorage, root []byte) (*StateDB, error) {
 	st := &StateDB{
 		root:   root,
 		treeDB: db,
-		objs:   make(map[common.Address]*StateObject),
+		objs:   make(map[common.Address]*stateObject),
 	}
 	st.merkleTree, err = avlmerkle.NewTreeN(st.treeDB, root)
 	return st, err
@@ -57,7 +57,7 @@ func (st *StateDB) Copy() *StateDB {
 	copy(cpy.root, st.root)
 	cpy.treeDB = st.treeDB
 	cpy.merkleTree = st.merkleTree.Copy()
-	cpy.objs = make(map[common.Address]*StateObject)
+	cpy.objs = make(map[common.Address]*stateObject)
 	for k, v := range st.objs {
 		cpy.objs[k] = v
 	}
@@ -69,6 +69,15 @@ func (st *StateDB) Set(snap *StateDB) *StateDB {
 	st.merkleTree = snap.merkleTree
 	st.objs = snap.objs
 	return st
+}
+
+func (st *StateDB) GetStateRoot(addr common.Address) common.Hash {
+	obj := st.GetOrNewStateObj(addr)
+	if obj != nil {
+		return obj.GetStateRoot()
+	}
+
+	return common.Hash{}
 }
 
 func (st *StateDB) AddBalance(addr common.Address, val *big.Int) {
@@ -128,13 +137,13 @@ func (st *StateDB) AddNonce(addr common.Address, val uint64) {
 	}
 }
 
-func (st *StateDB) GetStateObj(addr common.Address) *StateObject {
+func (st *StateDB) GetStateObj(addr common.Address) *stateObject {
 	if st.objs[addr] != nil {
 		return st.objs[addr]
 	}
 	hash := ahash.SHA256(addr.Bytes())
 	if val, has := st.merkleTree.Get(hash); has {
-		obj := &StateObject{}
+		obj := &stateObject{}
 		if err := rawencode.Decode(val, obj); err != nil {
 			return nil
 		}
@@ -145,7 +154,7 @@ func (st *StateDB) GetStateObj(addr common.Address) *StateObject {
 	return nil
 }
 
-func (st *StateDB) newStateObj(address common.Address) *StateObject {
+func (st *StateDB) newStateObj(address common.Address) *stateObject {
 	obj := NewStateObj(address, st.merkleTree, st.treeDB)
 	st.objs[obj.address] = obj
 	return obj
@@ -159,7 +168,7 @@ func (st *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-func (st *StateDB) GetOrNewStateObj(addr common.Address) *StateObject {
+func (st *StateDB) GetOrNewStateObj(addr common.Address) *stateObject {
 	stateObj := st.GetStateObj(addr)
 	if stateObj == nil {
 		stateObj = st.newStateObj(addr)
@@ -302,18 +311,19 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 	return nil
 }
 
-func (so *StateObject) GetExtra() []byte {
-	return so.extra
-}
+func (s *StateDB) GetExtra(addr common.Address) []byte {
+	stateObject := s.GetOrNewStateObj(addr)
+	if stateObject != nil {
+		return stateObject.GetExtra()
+	}
 
-func (so *StateObject) GetCode() []byte {
-	return so.code
+	return nil
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.GetStateObj(addr)
 	if stateObject != nil {
-		return stateObject.Code(s.treeDB)
+		return stateObject.GetCode()
 	}
 	return nil
 }

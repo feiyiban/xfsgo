@@ -88,7 +88,7 @@ func TestNewEVMBlockContext(t *testing.T) {
 	txContext := xfsgo.NewEVMTxContext(msg)
 
 	stateDB := NewMemStorage()
-	stateTree := state.NewStateTree(stateDB, nil)
+	stateTree := state.NewStateDB(stateDB, nil)
 	stateTree.GetOrNewStateObj(fromAddress)
 	stateTree.AddBalance(fromAddress, big.NewInt(1e18))
 	testBalance := stateTree.GetBalance(fromAddress)
@@ -566,7 +566,7 @@ func TestNewEVMBlockContext_NFT(t *testing.T) {
 	txContext := xfsgo.NewEVMTxContext(msg)
 
 	stateDB := NewMemStorage()
-	stateTree := state.NewStateTree(stateDB, nil)
+	stateTree := state.NewStateDB(stateDB, nil)
 	stateTree.GetOrNewStateObj(fromAddress)
 	stateTree.AddBalance(fromAddress, big.NewInt(1e18))
 	testBalance := stateTree.GetBalance(fromAddress)

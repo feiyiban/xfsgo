@@ -137,7 +137,7 @@ func (o *msgOnceSendTester) GetProtocolMsgCh() (chan p2p.MessageReader, error) {
 func newTestTxPool(chain chainMgr, gasLimit, gasPrice *big.Int) *xfsgo.TxPool {
 	statefn := func() *state.StateDB {
 		chainhead := chain.CurrentBHeader()
-		return state.NewStateTree(testMemStorage, chainhead.StateRoot.Bytes())
+		return state.NewStateDB(testMemStorage, chainhead.StateRoot.Bytes())
 	}
 	gasLimitFn := func() *big.Int {
 		return gasLimit

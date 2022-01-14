@@ -112,7 +112,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	if cfg.State == nil {
 		// cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		cfg.State = state.NewStateTree(test.NewMemStorage(), nil)
+		cfg.State = state.NewStateDB(test.NewMemStorage(), nil)
 	}
 	var (
 		address = common.Bytes2Address([]byte("contract"))

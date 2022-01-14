@@ -245,35 +245,35 @@ func coverReceipt(src *ReceiptResp, dst **ReceiptResp) error {
 	return common.Objcopy(src, &dst)
 }
 
-func coverState2Resp(state *state.StateObject, dst **StateObjResp) error {
+func coverState2Resp(state *state.StateDB, addr common.Address, dst **StateObjResp) error {
 	if state == nil {
 		return nil
 	}
 	result := new(StateObjResp)
-	extra := state.GetExtra()
+	extra := state.GetExtra(addr)
 	if extra != nil {
-		statehex := hex.EncodeToString(state.GetExtra())
+		statehex := hex.EncodeToString(state.GetExtra(addr))
 		if statehex != "" {
 			statehex = "0x" + statehex
 			result.Extra = &statehex
 		}
 	}
-	code := state.GetCode()
+	code := state.GetCode(addr)
 	if code != nil {
-		codehex := hex.EncodeToString(state.GetExtra())
+		codehex := hex.EncodeToString(state.GetExtra(addr))
 		if codehex != "" {
 			codehex = "0x" + codehex
 			result.Code = &codehex
 		}
 	}
-	stateRoot := state.GetStateRoot()
+	stateRoot := state.GetStateRoot(addr)
 	if !bytes.Equal(stateRoot[:], common.HashZ[:]) {
 		result.StateRoot = &stateRoot
 	}
-	balance := state.GetBalance()
+	balance := state.GetBalance(addr)
 	balanceText := balance.Text(10)
 	result.Balance = &balanceText
-	result.Nonce = state.GetNonce()
+	result.Nonce = state.GetNonce(addr)
 	*dst = result
 	return nil
 }

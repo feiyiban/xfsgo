@@ -169,7 +169,7 @@ func NewBlockChainN(stateDB, chainDB, extraDB badger.IStorage, eventBus *EventBu
 		return nil, err
 	}
 	stateRootHash := bc.currentBHeader.StateRoot
-	bc.stateTree = state.NewStateTree(stateDB, stateRootHash.Bytes())
+	bc.stateTree = state.NewStateDB(stateDB, stateRootHash.Bytes())
 	return bc, nil
 }
 
@@ -180,7 +180,7 @@ func (bc *BlockChain) GetNonce(addr common.Address) uint64 {
 }
 
 func (bc *BlockChain) StateAt(rootHash common.Hash) *state.StateDB {
-	return state.NewStateTree(bc.stateDB, rootHash.Bytes())
+	return state.NewStateDB(bc.stateDB, rootHash.Bytes())
 }
 
 // getBlockByNumber get Block's Info about the Optimum chain
@@ -405,7 +405,7 @@ func (bc *BlockChain) insertBHeader2Chain(bHeader *BlockHeader) error {
 	bc.currentBHeader = bHeader
 	bc.lastBlockHash = bHeader.HeaderHash()
 	lastStateRoot := bHeader.StateRoot
-	bc.stateTree = state.NewStateTree(bc.stateDB, lastStateRoot.Bytes())
+	bc.stateTree = state.NewStateDB(bc.stateDB, lastStateRoot.Bytes())
 	return nil
 }
 
@@ -916,48 +916,9 @@ func (bc *BlockChain) IntrinsicGas(data []byte) *big.Int {
 	return common.CalcTxInitialCost(data)
 }
 
-func buyGas(sender *state.StateObject, tx *Transaction, gp *GasPool, gas *big.Int) error {
-	mgval := new(big.Int).Mul(tx.GasPrice, tx.GasLimit)
-	if sender.GetBalance().Cmp(mgval) < 0 {
-		return fmt.Errorf("per-buy gas err, balance is not enough")
-	}
-	if err := gp.SubGas(tx.GasLimit); err != nil {
-		//logrus.Warnf("gas limit out: %s, gp=%s", tx.GasLimit, gp)
-		return err
-	}
-	gas.Add(gas, tx.GasLimit)
-	sender.SubBalance(mgval)
-	return nil
-}
-
-// func txPreCheck(stateTree *StateTree, tx *Transaction, gp *GasPool, gas *big.Int) (*StateObj, error) {
-// 	fromaddr, err := tx.FromAddr()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	sender := stateTree.GetOrNewStateObj(fromaddr)
-// 	if sender.GetNonce() != tx.Nonce {
-// 		return sender, fmt.Errorf("nonce err: want=%d, got=%d", sender.GetNonce(), tx.Nonce)
-// 	}
-// 	if err = buyGas(sender, tx, gp, gas); err != nil {
-// 		return sender, err
-// 	}
-// 	return sender, nil
-// }
-
 func TxToAddrNotSet(tx *Transaction) bool {
 	return bytes.Equal(tx.To[:], common.ZeroAddr[:])
 }
-
-// func (bc *BlockChain) transfer(st *StateTree, seder *StateObj, to common.Address, amount *big.Int) error {
-// 	toObj := st.GetOrNewStateObj(to)
-// 	if seder.balance.Cmp(amount) < 0 {
-// 		return errors.New("from balance is not enough")
-// 	}
-// 	seder.SubBalance(amount)
-// 	toObj.AddBalance(amount)
-// 	return nil
-// }
 
 func (bc *BlockChain) GetBlockHashes(from uint64, count uint64) []common.Hash {
 	bc.mu.Lock()

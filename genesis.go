@@ -63,22 +63,22 @@ func WriteGenesisBlockN(stateDB, chainDB badger.IStorage, reader io.Reader, debu
 		return nil, err
 	}
 	chaindb := newChainDBN(chainDB, debug)
-	stateTree := state.NewStateTree(stateDB, nil)
+	stateDB_ := state.NewStateDB(stateDB, nil)
 	//logrus.Debugf("initialize genesis account count: %d", len(genesis.Accounts))
 	for addr, a := range genesis.Accounts {
 		address := common.B58ToAddress([]byte(addr))
 		balance := common.ParseString2BigInt(a.Balance)
-		stateTree.AddBalance(address, balance)
+		stateDB_.AddBalance(address, balance)
 		//logrus.Debugf("initialize genesis account: %s, balance: %d", address, balance)
 	}
-	stateTree.UpdateAll()
+	stateDB_.UpdateAll()
 	timestamp := common.ParseString2BigInt(genesis.Timestamp)
 	var coinbase common.Address
 	if genesis.Coinbase != "" {
 		coinbase = common.B58ToAddress([]byte(genesis.Coinbase))
 	}
 	GenesisBits = genesis.Bits
-	rootHash := common.Bytes2Hash(stateTree.Root())
+	rootHash := common.Bytes2Hash(stateDB_.Root())
 	HashPrevBlock := common.Hex2Hash(genesis.HashPrevBlock)
 	block := NewBlock(&BlockHeader{
 		Nonce:         genesis.Nonce,
@@ -98,7 +98,7 @@ func WriteGenesisBlockN(stateDB, chainDB badger.IStorage, reader io.Reader, debu
 	}
 	logrus.WithField("hash", block.HashHex()).Infof("Write genesis block")
 	//logrus.Infof("write genesis block hash: %s", block.HashHex())
-	if err = stateTree.Commit(); err != nil {
+	if err = stateDB_.Commit(); err != nil {
 		return nil, err
 	}
 	if err = chaindb.WriteBHeaderWithHash(block.Header); err != nil {
