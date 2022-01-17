@@ -260,7 +260,7 @@ func coverState2Resp(state *state.StateDB, addr common.Address, dst **StateObjRe
 	}
 	code := state.GetCode(addr)
 	if code != nil {
-		codehex := hex.EncodeToString(state.GetExtra(addr))
+		codehex := hex.EncodeToString(state.GetCode(addr))
 		if codehex != "" {
 			codehex = "0x" + codehex
 			result.Code = &codehex
